@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "920997739613",
+    "project_id": "resonate-audio-sync",
+    "storage_bucket": "resonate-audio-sync.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920997739613:android:70dd692ac81b4dbb0061b4",
+        "android_client_info": {
+          "package_name": "com.example.resonate_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADyfDR0F534MQML6E2-jGOodxuZUNtaWE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
