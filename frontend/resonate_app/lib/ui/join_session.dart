@@ -18,25 +18,74 @@ class _JoinSessionState extends State<JoinSession> {
     super.dispose();
   }
 
+  void joinRoom() {
+    if (ctrl.text.trim().isEmpty) return;
+
+    socketService.emit("join-room", {"code": ctrl.text.trim()});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Resonate'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Center(
+      appBar: AppBar(title: const Text("Join Session"), centerTitle: true),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 30),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(controller: ctrl),
-            TextButton(
-              onPressed: () {
-                socketService.emit("join-room", {"code": ctrl.text});
-              },
-              child: Text('Submit Code'),
+            const Icon(Icons.group, size: 80, color: Colors.blue),
+
+            const SizedBox(height: 20),
+
+            const Text(
+              "Enter Session Code",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 10),
+
+            const Text(
+              "Ask your friend for the session code to join the music room.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+
+            const SizedBox(height: 30),
+
+            TextField(
+              controller: ctrl,
+              textAlign: TextAlign.center,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(
+                fontSize: 20,
+                letterSpacing: 3,
+                fontWeight: FontWeight.bold,
+              ),
+              decoration: InputDecoration(
+                hintText: "ABC123",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: joinRoom,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Join Session",
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
             ),
           ],
         ),
