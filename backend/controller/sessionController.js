@@ -155,7 +155,7 @@ exports.pause = (io, socket, data) => {
 }
 
 exports.stop = (io, socket, data) => {
-    const { sessionId, position } = data;
+    const { sessionId } = data;
     const session = get(sessionId);
     validators.requireSession(session);
     validators.requireHost(socket, session);
