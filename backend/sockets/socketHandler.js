@@ -18,8 +18,8 @@ export default function socketHandler(io) {
         SESSION EVENTS
       */
 
-      socket.on(CLIENT.CREATE_SESSION, (data) => {
-        sessionController.createSession(io, socket, data);
+      socket.on(CLIENT.CREATE_SESSION, () => {
+        sessionController.createSession(socket);
       });
 
       socket.on(CLIENT.JOIN_SESSION, (data) => {

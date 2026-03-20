@@ -16,5 +16,6 @@ export const SERVER = {
     SONG_UPDATED: "song_updated",
     PLAY_SONG: "play_song",
     PAUSE_SONG: "pause_song",
-    STOP_SONG: "stop_song"
+    STOP_SONG: "stop_song",
+    ERROR_MSG:"error_message",
 };

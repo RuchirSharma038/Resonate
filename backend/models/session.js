@@ -24,11 +24,3 @@ class Session {
 export default Session;
 
 
-//Example track object
-/*
-session.track = {
-  url: "https://youtube.com/watch?v=abc",
-  title: "Blinding Lights",
-  duration: 200,
-}
-*/

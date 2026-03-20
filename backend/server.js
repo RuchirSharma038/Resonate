@@ -5,6 +5,7 @@ const http = require("http");
 
 const { Server } = require("socket.io");
 import authMiddleware from "./middleware/socketAuth.js";
+import socketHandler from './sockets/socketHandler.js';
 
 const app = express();
 const server = http.createServer(app);

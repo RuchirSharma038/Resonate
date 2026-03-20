@@ -3,10 +3,10 @@ import 'package:just_audio/just_audio.dart';
 class AudioService {
   final AudioPlayer _player = AudioPlayer();
 
-  Future<void> loadAndPlay(String url) async {
+  Future<void> load(String url) async {
     await _player.stop();
     await _player.setUrl(url);
-    await _player.play();
+    //await _player.play();
   }
 
   Future<void> play() async {
@@ -19,6 +19,10 @@ class AudioService {
 
   Future<void> stop() async {
     await _player.stop();
+  }
+
+  Future<void> seek(Duration position) async {
+    await _player.seek(position);
   }
 
   AudioPlayer get player => _player;

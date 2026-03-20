@@ -8,9 +8,12 @@ import clientRegistry from "../services/clientRegistry.js";
 import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
 import timeUtils from "../utils/timeUtils.js";
+import idGenerator from "../utils/idGenerator.js";
+
 //1. Create Session
-exports.createSession = (io, socket, data) => {
-    const { sessionId } = data;
+exports.createSession = (socket) => {
+    // const { sessionId } = data;
+    const sessionId = idGenerator.generateSessionId();
     let session = get(sessionId);
     if (session) {
         socket.emit("error", { message: "Session already exists" });
@@ -115,9 +118,12 @@ exports.handleDisconnect = (io, socket) => {
 exports.setUrl = (io, socket, data) => {
     const { sessionId, url } = data;
     const session = get(sessionId);
-    validators.requireSession(session);
-
-    validators.requireHost(socket, session);
+    if (!validators.requireSession(session)) {
+        return;
+    }
+    if (!validators.requireHost(socket, session)) {
+        return;
+    }
 
 
     session.trackUrl = url;
@@ -129,14 +135,18 @@ exports.setUrl = (io, socket, data) => {
 exports.play = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    validators.requireSession(session);
-    validators.requireHost(socket, session);
+    if (!validators.requireSession(session)) {
+        return;
+    }
+    if (!validators.requireHost(socket, session)) {
+        return;
+    }
 
     const startTime = timeUtils.computeStartTime();
     session.state = "playing";
     session.startedAt = startTime;
 
-    io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime });
+    io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime });
 
 
 }
@@ -144,21 +154,29 @@ exports.play = (io, socket, data) => {
 exports.pause = (io, socket, data) => {
     const { sessionId, position } = data;
     const session = get(sessionId);
-    validators.requireSession(session);
-    validators.requireHost(socket, session);
+    if (!validators.requireSession(session)) {
+        return;
+    }
+    if (!validators.requireHost(socket, session)) {
+        return;
+    }
 
 
     session.state = "paused";
     session.position = position;
 
-    io.to(sessionId).emit(SERVER.PAUSE_SONG, { position });
+    io.to(sessionId).emit(SERVER.PAUSE_SONG, { position: position });
 }
 
 exports.stop = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    validators.requireSession(session);
-    validators.requireHost(socket, session);
+    if (!validators.requireSession(session)) {
+        return;
+    }
+    if (!validators.requireHost(socket, session)) {
+        return;
+    }
 
     session.state = "stopped";
 

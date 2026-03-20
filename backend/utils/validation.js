@@ -1,17 +1,27 @@
-function requireSession(session){
-    if(!session){
-        throw new Error("Session not found");
-    }
+import { SERVER } from "../constants/events";
 
-    
-}
-function requireHost(socket,session){
-    if(socket.userId !== session.hostUserId){
-        throw new Error("Only host allowed");
+function requireSession(session) {
+    if (!session) {
+        socket.emit(SERVER.ERROR_MSG, {
+            message: "Session does not exist"
+        });
+        return false;
     }
+    return true;
+
 
 }
-export default{
+function requireHost(socket, session) {
+    if (socket.hostId !== session.userId) {
+        socket.emit(SERVER.ERROR_MSG, {
+            message: "Only host can perform this action"
+        });
+        return false;
+    }
+    return true;
+
+}
+export default {
     requireSession,
     requireHost
 }

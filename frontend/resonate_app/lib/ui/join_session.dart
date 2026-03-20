@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:resonate_app/services/socket_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class JoinSession extends StatefulWidget {
+import 'package:resonate_app/providers/session_provider.dart';
+
+import 'package:resonate_app/ui/audio_play.dart';
+
+class JoinSession extends ConsumerStatefulWidget {
   const JoinSession({super.key});
 
   @override
-  State<JoinSession> createState() => _JoinSessionState();
+  ConsumerState<JoinSession> createState() => _JoinSessionState();
 }
 
-class _JoinSessionState extends State<JoinSession> {
+class _JoinSessionState extends ConsumerState<JoinSession> {
   final TextEditingController ctrl = TextEditingController();
-  final socketService = SocketService();
 
   @override
   void dispose() {
@@ -18,14 +21,17 @@ class _JoinSessionState extends State<JoinSession> {
     super.dispose();
   }
 
-  void joinRoom() {
-    if (ctrl.text.trim().isEmpty) return;
-
-    socketService.emit("join-room", {"code": ctrl.text.trim()});
-  }
-
   @override
   Widget build(BuildContext context) {
+    ref.listen(sessionProvider, (previous, next) {
+      if (previous?.sessionId != next.sessionId && next.sessionId.isNotEmpty) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AudioPlay()),
+        );
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(title: const Text("Join Session"), centerTitle: true),
       body: Padding(
@@ -74,7 +80,16 @@ class _JoinSessionState extends State<JoinSession> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: joinRoom,
+                onPressed: () {
+                  final sessionId = ctrl.text.trim();
+                  if (sessionId.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Enter session code")),
+                    );
+                    return;
+                  }
+                  ref.read(sessionProvider.notifier).joinSession(sessionId);
+                },
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(

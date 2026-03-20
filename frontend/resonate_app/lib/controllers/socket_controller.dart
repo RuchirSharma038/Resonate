@@ -7,15 +7,31 @@ class SocketController {
     socketService.connect();
   }
 
-  void joinSession(String code) {
-    socketService.emit("join-session", {"code": code});
+  void createSession() {
+    socketService.emit("create_session", {});
   }
 
-  void playSong(String url) {
-    socketService.emit("play-song", {"url": url});
+  void joinSession(String sessionId) {
+    socketService.emit("join_session", {"sessionId": sessionId});
   }
 
-  void listenNewSong(Function(dynamic) callback) {
-    socketService.listen("new-song", callback);
+  void leaveSession(String sessionId) {
+    socketService.emit("leave_session", {"sessionId": sessionId});
+  }
+
+  void setUrl(String sessionId, String url) {
+    socketService.emit("set_url", {"sessionId": sessionId, "url": url});
+  }
+
+  void playSong(String sessionId) {
+    socketService.emit("play", {"sessionId": sessionId});
+  }
+
+  void pause(String sessionId) {
+    socketService.emit("pause", {"sessionId": sessionId});
+  }
+
+  void stop(String sessionId) {
+    socketService.emit("stop", {"sessionId": sessionId});
   }
 }
