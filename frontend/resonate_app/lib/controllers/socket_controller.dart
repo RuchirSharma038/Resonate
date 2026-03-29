@@ -1,10 +1,18 @@
+import "package:resonate_app/services/time_sync_service.dart";
+
 import "../services/socket_service.dart";
 
 class SocketController {
-  final SocketService socketService = SocketService();
+  final SocketService socketService;
+  late final TimeSyncService timeSync;
+
+  SocketController() : socketService = SocketService() {
+    timeSync = TimeSyncService(socketService);
+  }
 
   void init() {
     socketService.connect();
+    timeSync.init();
   }
 
   void createSession() {

@@ -1,6 +1,7 @@
 //import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:resonate_app/providers/audio_service.dart';
+import 'package:resonate_app/services/time_sync_service.dart';
 //import 'package:resonate_app/models/session_model.dart';
 import '../services/socket_service.dart';
 import './session_state.dart';
@@ -13,8 +14,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
   final SocketController controller;
   final SocketService socket;
   final AudioService audio;
+  final TimeSyncService timeSync;
 
-  SessionNotifier(this.controller, this.socket, this.audio)
+  SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
     : super(SessionState.initial()) {
     _init();
   }
@@ -68,22 +70,62 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
 
     socket.listen("play_song", (data) async {
-      final startedAt = DateTime.fromMillisecondsSinceEpoch(data["startTime"]);
-      final position = state.position;
-      await audio.seek(position);
-      await audio.play();
+      final serverStartTime = data["startTime"];
+      final basePosition = data["position"];
+      final now = timeSync.getServerTime();
+      final timeUntilPlay = serverStartTime - now;
+      if (timeUntilPlay > 0) {
+        await audio.seek(Duration(milliseconds: basePosition.toInt()));
+        await Future.delayed(Duration(milliseconds: timeUntilPlay.toInt()));
+
+        final now2 = timeSync.getServerTime();
+        final drift = now2 - serverStartTime;
+
+        if (drift.abs() > 15) {
+          await audio.seek(
+            Duration(milliseconds: (basePosition + drift).toInt()),
+          );
+        }
+        await audio.play();
+      } else {
+        final overrun = (-timeUntilPlay).clamp(0, 10000);
+        final correctedPosition = Duration(
+          milliseconds: (basePosition + overrun).toInt(),
+        );
+
+        await audio.seek(correctedPosition);
+        await audio.play();
+      }
+
       state = state.copyWith(
         playbackState: PlaybackState.playing,
-        startedAt: startedAt,
+        startedAt: DateTime.fromMillisecondsSinceEpoch(serverStartTime),
+        position: Duration(milliseconds: basePosition),
       );
     });
 
     socket.listen("pause_song", (data) async {
+      final serverPosition = (data["position"] as num).toDouble();
+      final pauseTime = data["pauseTime"];
+      final now = timeSync.getServerTime();
+      final drift = now - pauseTime;
+
       await audio.pause();
-      state = state.copyWith(
-        playbackState: PlaybackState.paused,
-        position: Duration(milliseconds: data["position"]),
-      );
+
+      if (drift.abs() > 300) {
+        final exactPosition = Duration(milliseconds: serverPosition.toInt());
+        await audio.seek(exactPosition);
+
+        state.copyWith(
+          playbackState: PlaybackState.paused,
+          position: exactPosition,
+        );
+      } else {
+        state = state.copyWith(
+          playbackState: PlaybackState.paused,
+          position: Duration(milliseconds: serverPosition.toInt()),
+        );
+      }
     });
 
     socket.listen("stop_song", (_) async {
@@ -91,6 +133,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(
         playbackState: PlaybackState.stopped,
         position: Duration.zero,
+        startedAt: null,
       );
     });
   }
