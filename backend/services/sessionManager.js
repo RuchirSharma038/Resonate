@@ -17,7 +17,7 @@ export const addClient=(sessionId,userId)=>{
     const session = sessions.get(sessionId);
     if(!session) return;
 
-    session.clients.add(userId);
+    session.clients.set(userId,true);
 }
 export const removeClient=(sessionId,userId)=>{
     const session = sessions.get(sessionId);
@@ -31,7 +31,7 @@ export const removeSession=(sessionId)=>{
 
 export const getAllSessionsOfUser=(userId)=>{
     const result =[];
-    for(const [sessionId,session] in sessions.entries()){
+    for(const [sessionId,session] of sessions.entries()){
         if(session.clients.has(userId)){
             result.push(session);
         }

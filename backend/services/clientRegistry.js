@@ -14,7 +14,7 @@ function removeClient(socket){
 }
 
 function getSocketId(userId){
-    return userToSocket(userId);
+    return userToSocket.get(userId);
 }
 
 export default {

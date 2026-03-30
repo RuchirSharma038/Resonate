@@ -53,11 +53,13 @@ class SessionState {
       playbackState: playbackState ?? this.playbackState,
       url: url ?? this.url,
       position: position ?? this.position,
-      startedAt: startedAt ?? this.startedAt,
+      startedAt: startedAt == _keep ? this.startedAt : startedAt as DateTime?,
       participants: participants ?? this.participants,
       isConnected: isConnected ?? this.isConnected,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
     );
   }
+
+  static const _keep = Object();
 }

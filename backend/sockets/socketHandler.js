@@ -1,7 +1,7 @@
 import { CLIENT } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
-import sessionController from "../controller/sessionController.js";
-import logger from "../utils/logger.js";
+import * as sessionController from "../controller/sessionController.js";
+import * as logger from "../utils/logger.js";
 
 export default function socketHandler(io) {
 

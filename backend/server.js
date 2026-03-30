@@ -1,9 +1,7 @@
-const express = require("express");
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
 import { cors, pingInterval, pingTimeout } from './config/socketConfig.js';
-
-const http = require("http");
-
-const { Server } = require("socket.io");
 import authMiddleware from "./middleware/socketAuth.js";
 import socketHandler from './sockets/socketHandler.js';
 

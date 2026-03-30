@@ -27,6 +27,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _listenConnection();
     _listenSessionEvents();
     _listenPlaybackEvents();
+    _listenErrorEvents();
   }
 
   void _listenConnection() {
@@ -41,7 +42,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   void _listenSessionEvents() {
     socket.listen("session_created", (data) {
-      state = state.copyWith(sessionId: data["sessionId"]);
+      state = state.copyWith(sessionId: data["sessionId"], isLoading: false);
     });
 
     socket.listen("user_joined", (data) {
@@ -116,7 +117,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
         final exactPosition = Duration(milliseconds: serverPosition.toInt());
         await audio.seek(exactPosition);
 
-        state.copyWith(
+        state = state.copyWith(
           playbackState: PlaybackState.paused,
           position: exactPosition,
         );
@@ -135,6 +136,12 @@ class SessionNotifier extends StateNotifier<SessionState> {
         position: Duration.zero,
         startedAt: null,
       );
+    });
+  }
+
+  void _listenErrorEvents() {
+    socket.listen("error", (data) {
+      state = state.copyWith(error: data["message"], isLoading: false);
     });
   }
 
@@ -176,7 +183,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   void stop() {
     if (state.sessionId.isEmpty) return;
-    controller.pause(state.sessionId);
+    controller.stop(state.sessionId);
   }
 
   Duration getCurrentPosition() {
@@ -184,7 +191,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
         state.startedAt == null) {
       return state.position;
     }
-    final now = DateTime.now();
+    final now = DateTime.fromMillisecondsSinceEpoch(
+      timeSync.getServerTime().toInt(),
+    );
     final diff = now.difference(state.startedAt!);
     return state.position + diff;
   }

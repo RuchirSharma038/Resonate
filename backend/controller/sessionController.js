@@ -3,7 +3,7 @@
 // 2. setUrl, play, pause, stop
 // 3. handleDisconnect
 
-import { SERVER } from "../constants/events";
+import { SERVER } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
 import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
@@ -11,7 +11,7 @@ import timeUtils from "../utils/timeUtils.js";
 import idGenerator from "../utils/idGenerator.js";
 
 //1. Create Session
-exports.createSession = (socket) => {
+export const createSession = (socket) => {
     // const { sessionId } = data;
     const sessionId = idGenerator.generateSessionId();
     let session = get(sessionId);
@@ -36,12 +36,12 @@ exports.createSession = (socket) => {
 
 
 // 2. Join Session
-exports.joinSession = (io, socket, data) => {
+export const joinSession = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
 
     // First check if the session with sessionId exists or not
-    validators.requireSession(session);
+    validators.requireSession(socket,session);
 
     // Join user in that room
     socket.join(sessionId);
@@ -54,23 +54,27 @@ exports.joinSession = (io, socket, data) => {
         userId: socket.userId
     });
 
-    //Now send the present state of socket to the user
+    const livePosition = session.state === "playing" && session.startedAt
+        ? session.position + (Date.now() - session.startedAt)
+        : session.position;
+
     socket.emit(SERVER.SESSION_STATE, {
         url: session.trackUrl,
         state: session.state,
-        position: session.position,
+        position: livePosition,
         startedAt: session.startedAt,
-
     });
+
+    
 
 }
 
-function leaveSession(io, socket, data) {
+export function leaveSession(io, socket, data) {
     const { sessionId } = data;
 
     const session = get(sessionId);
 
-    validators.requireSession(session);
+    validators.requireSession(socket,session);
 
     // remove the clientId from sessionMap
     removeClient(sessionId, socket.userId);
@@ -90,35 +94,35 @@ function leaveSession(io, socket, data) {
 
 
 function handleHostLeave(io, session, leavingUserId) {
-    if (session.hostId !== leavingUserId) {
+    if (session.hostUserId !== leavingUserId) {
         return;
     }
-    const remainingUsers = [...session.clients];
+    const remainingUsers = [...session.clients.keys()];
     if (remainingUsers.length === 0) {
         removeSession(session.sessionId);
         return;
     }
     const newHost = remainingUsers[0];
-    session.hostId = newHost;
+    session.hostUserId = newHost;
     io.to(session.sessionId).emit("host_changed", {
         hostId: newHost
     });
 }
 
-exports.handleDisconnect = (io, socket) => {
+export const handleDisconnect = (io, socket) => {
     const sessions = getAllSessionsOfUser(socket.userId);
-    sessions.forEach(sessionId => {
-        leaveSession(io, socket, { sessionId });
+    sessions.forEach(session=> {
+        leaveSession(io, socket, { sessionId:session.sessionId });
     });
     clientRegistry.removeClient(socket);
 
 }
 
 
-exports.setUrl = (io, socket, data) => {
+export const setUrl = (io, socket, data) => {
     const { sessionId, url } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(session)) {
+    if (!validators.requireSession(socket,session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
@@ -132,46 +136,65 @@ exports.setUrl = (io, socket, data) => {
 
 }
 
-exports.play = (io, socket, data) => {
+export const play = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(session)) {
+    if (!validators.requireSession(socket,session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
+        return;
+    }
+
+    if (session.state === "playing") {
         return;
     }
 
     const startTime = timeUtils.computeStartTime();
     session.state = "playing";
+    session.position = session.position ?? 0;
     session.startedAt = startTime;
 
-    io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime });
+    io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime, position: session.position });
 
 
 }
 
-exports.pause = (io, socket, data) => {
-    const { sessionId, position } = data;
+export const pause = (io, socket, data) => {
+    const { sessionId } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(session)) {
+    if (!validators.requireSession(socket,session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
         return;
     }
+    if (session.state !== "playing") {
+        return;
+    }
 
+    const now = Date.now();
+
+    let elapsed = 0;
+    if (session.startedAt) {
+        elapsed = Math.max(0, now - session.startedAt);
+    }
+
+    session.position += elapsed;
 
     session.state = "paused";
-    session.position = position;
+    session.startedAt = null;
 
-    io.to(sessionId).emit(SERVER.PAUSE_SONG, { position: position });
+    io.to(sessionId).emit(SERVER.PAUSE_SONG, {
+        position: session.position,
+        pauseTime: now
+    });
 }
 
-exports.stop = (io, socket, data) => {
+export const stop = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(session)) {
+    if (!validators.requireSession(socket,session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
@@ -185,7 +208,7 @@ exports.stop = (io, socket, data) => {
 
     io.to(sessionId).emit(SERVER.STOP_SONG);
 }
-exports.leaveSession = leaveSession;
+
 
 
 

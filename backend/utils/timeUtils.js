@@ -1,5 +1,5 @@
 function computeStartTime(){
-    return Date.now()+2000;
+    return Date.now()+1500;
 }
 function computePosition(now,startTime){
     return now-startTime;

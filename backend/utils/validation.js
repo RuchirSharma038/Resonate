@@ -1,6 +1,6 @@
-import { SERVER } from "../constants/events";
+import { SERVER } from "../constants/events.js";
 
-function requireSession(session) {
+function requireSession(socket,session) {
     if (!session) {
         socket.emit(SERVER.ERROR_MSG, {
             message: "Session does not exist"
