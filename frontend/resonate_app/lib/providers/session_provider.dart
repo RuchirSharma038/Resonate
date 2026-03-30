@@ -8,7 +8,9 @@ import 'package:resonate_app/services/socket_service.dart';
 import 'package:resonate_app/services/time_sync_service.dart';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
-  return SocketService();
+  final s = SocketService();
+  ref.onDispose(() => s.disconnect());
+  return s;
 });
 
 final socketControllerProvider = Provider<SocketController>((ref) {
@@ -17,7 +19,15 @@ final socketControllerProvider = Provider<SocketController>((ref) {
 
 final timeSyncServiceProvider = Provider<TimeSyncService>((ref) {
   final socket = ref.read(socketServiceProvider);
-  return TimeSyncService(socket);
+  final ts = TimeSyncService(socket);
+  ts.init();
+
+  // Stop timers if this provider is disposed
+  ref.onDispose(() {
+    ts.periodicTimer?.cancel();
+  });
+
+  return ts;
 });
 
 final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((

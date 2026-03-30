@@ -3,12 +3,12 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 //import 'dart:async';
 
 class SocketService {
-  static final SocketService _instance = SocketService._internal();
+  // static final SocketService _instance = SocketService._internal();
 
-  factory SocketService() {
-    return _instance;
-  }
-  SocketService._internal();
+  // factory SocketService() {
+  //   return _instance;
+  // }
+  // SocketService._internal();
 
   late IO.Socket socket;
 
