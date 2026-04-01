@@ -178,7 +178,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(
         playbackState: PlaybackState.stopped,
         position: Duration.zero,
-        startedAt: null,
+
+        clearStartedAt: true,
       );
     });
   }
@@ -208,8 +209,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   void setUrl(String url) {
-    if (state.sessionId.isEmpty) return;
+    final error = _validateAudioUrl(url);
+    if (error != null) {
+      state = state.copyWith(error: error);
+      return;
+    }
 
+    state = state.copyWith(error: null, clearError: true);
     controller.setUrl(state.sessionId, url);
   }
 
@@ -228,6 +234,40 @@ class SessionNotifier extends StateNotifier<SessionState> {
   void stop() {
     if (state.sessionId.isEmpty) return;
     controller.stop(state.sessionId);
+  }
+
+  String? _validateAudioUrl(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return "URL cannot be empty";
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return "Invalid URL format";
+    if (!uri.isAbsolute) return "URL must be absolute (include http/https)";
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      return "URL must use http or https";
+    }
+    if (uri.host.isEmpty) return "URL must have a valid host";
+    if (uri.path.isEmpty || uri.path == '/') {
+      return "URL must point to a specific audio resource";
+    }
+
+    const supported = [
+      '.mp3',
+      '.wav',
+      '.ogg',
+      '.flac',
+      '.aac',
+      '.m4a',
+      '.opus',
+      '.webm',
+    ];
+    final pathLower = uri.path.toLowerCase();
+    final hasExtension = supported.any((ext) => pathLower.contains(ext));
+    if (!hasExtension) {
+      return "URL must point to a supported audio file (mp3, wav, ogg, flac, aac, m4a, opus, webm)";
+    }
+
+    return null; // valid
   }
 
   Duration getCurrentPosition() {

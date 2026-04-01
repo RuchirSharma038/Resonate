@@ -4,13 +4,20 @@
 // 3. handleDisconnect
 // 4. ping
 
-import { CLIENT, SERVER } from "../constants/events.js";
+import { SERVER } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
 import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
 import timeUtils from "../utils/timeUtils.js";
 import idGenerator from "../utils/idGenerator.js";
 
+function isStaleCommand(session, seq) {
+    
+    if (typeof seq !== "number") return false; 
+    if (seq <= session.lastCommandSeq) return true;
+    session.lastCommandSeq = seq;
+    return false;
+}
 //1. Create Session
 export const createSession = (socket) => {
     // const { sessionId } = data;
@@ -121,7 +128,7 @@ export const handleDisconnect = (io, socket) => {
 
 
 export const setUrl = (io, socket, data) => {
-    const { sessionId, url } = data;
+    const { sessionId, url, seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -129,16 +136,22 @@ export const setUrl = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
+    if (!validators.requireValidUrl(socket, url)) return;
+
+    if (isStaleCommand(session, seq)) return;
 
 
     session.trackUrl = url;
+    session.state = "stopped";
+    session.position = 0;
+    session.startedAt = null;
     io.to(sessionId).emit(SERVER.SONG_UPDATED, { url: url });
 
 
 }
 
 export const play = (io, socket, data) => {
-    const { sessionId } = data;
+    const { sessionId,seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -146,6 +159,7 @@ export const play = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
+    if(isStaleCommand(session,seq))return;
 
     if (session.state === "playing") {
         return;
@@ -162,7 +176,7 @@ export const play = (io, socket, data) => {
 }
 
 export const pause = (io, socket, data) => {
-    const { sessionId } = data;
+    const { sessionId,seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -170,6 +184,7 @@ export const pause = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
+    if(isStaleCommand(session,seq))return;
     if (session.state !== "playing") {
         return;
     }
@@ -193,7 +208,7 @@ export const pause = (io, socket, data) => {
 }
 
 export const stop = (io, socket, data) => {
-    const { sessionId } = data;
+    const { sessionId,seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -201,6 +216,7 @@ export const stop = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
+    if(isStaleCommand(session,seq))return;
 
     session.state = "stopped";
 
@@ -210,20 +226,20 @@ export const stop = (io, socket, data) => {
     io.to(sessionId).emit(SERVER.STOP_SONG);
 }
 
-export const handlePing=(socket,data)=>{
+export const handlePing = (socket, data) => {
     const t1 = Date.now();
 
-    if(!data ||typeof data.id !=='number'){
+    if (!data || typeof data.id !== 'number') {
         return;
     }
-    const {id,t0}=data;
+    const { id, t0 } = data;
     const t2 = Date.now();
 
-    socket.emit(SERVER.PONG,{
-        id:id,
-        t0:t0,
-        t1:t1,
-        t2:t2
+    socket.emit(SERVER.PONG, {
+        id: id,
+        t0: t0,
+        t1: t1,
+        t2: t2
     });
 }
 

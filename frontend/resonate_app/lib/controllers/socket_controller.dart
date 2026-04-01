@@ -5,6 +5,8 @@ import "../services/socket_service.dart";
 class SocketController {
   final SocketService socketService;
   late final TimeSyncService timeSync;
+  int _commandSeq = 0;
+  int _nextSeq() => ++_commandSeq;
 
   SocketController() : socketService = SocketService() {
     timeSync = TimeSyncService(socketService);
@@ -28,18 +30,22 @@ class SocketController {
   }
 
   void setUrl(String sessionId, String url) {
-    socketService.emit("set_url", {"sessionId": sessionId, "url": url});
+    socketService.emit("set_url", {
+      "sessionId": sessionId,
+      "url": url,
+      "seq": _nextSeq(),
+    });
   }
 
   void playSong(String sessionId) {
-    socketService.emit("play", {"sessionId": sessionId});
+    socketService.emit("play", {"sessionId": sessionId, "seq": _nextSeq()});
   }
 
   void pause(String sessionId) {
-    socketService.emit("pause", {"sessionId": sessionId});
+    socketService.emit("pause", {"sessionId": sessionId, "seq": _nextSeq()});
   }
 
   void stop(String sessionId) {
-    socketService.emit("stop", {"sessionId": sessionId});
+    socketService.emit("stop", {"sessionId": sessionId, "seq": _nextSeq()});
   }
 }
