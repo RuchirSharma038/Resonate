@@ -31,6 +31,14 @@ export default function socketHandler(io) {
       });
 
       /*
+        PING event
+      */
+     socket.on(CLIENT.PING,(data)=>{
+      sessionController.handlePing(socket,data);
+     });
+      
+
+      /*
         PLAYBACK EVENTS (HOST ONLY)
       */
 

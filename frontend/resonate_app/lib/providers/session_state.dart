@@ -53,7 +53,7 @@ class SessionState {
       playbackState: playbackState ?? this.playbackState,
       url: url ?? this.url,
       position: position ?? this.position,
-      startedAt: startedAt == _keep ? this.startedAt : startedAt as DateTime?,
+      startedAt: startedAt == _keep ? this.startedAt : startedAt,
       participants: participants ?? this.participants,
       isConnected: isConnected ?? this.isConnected,
       isLoading: isLoading ?? this.isLoading,

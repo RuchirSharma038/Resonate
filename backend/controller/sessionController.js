@@ -2,8 +2,9 @@
 // 1. create, join, leave
 // 2. setUrl, play, pause, stop
 // 3. handleDisconnect
+// 4. ping
 
-import { SERVER } from "../constants/events.js";
+import { CLIENT, SERVER } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
 import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
@@ -41,7 +42,7 @@ export const joinSession = (io, socket, data) => {
     const session = get(sessionId);
 
     // First check if the session with sessionId exists or not
-    validators.requireSession(socket,session);
+    validators.requireSession(socket, session);
 
     // Join user in that room
     socket.join(sessionId);
@@ -54,18 +55,18 @@ export const joinSession = (io, socket, data) => {
         userId: socket.userId
     });
 
-    const livePosition = session.state === "playing" && session.startedAt
-        ? session.position + (Date.now() - session.startedAt)
-        : session.position;
+    // const livePosition = session.state === "playing" && session.startedAt
+    //     ? session.position + (Date.now() - session.startedAt)
+    //     : session.position;
 
     socket.emit(SERVER.SESSION_STATE, {
         url: session.trackUrl,
         state: session.state,
-        position: livePosition,
+        position: session.position,
         startedAt: session.startedAt,
     });
 
-    
+
 
 }
 
@@ -74,7 +75,7 @@ export function leaveSession(io, socket, data) {
 
     const session = get(sessionId);
 
-    validators.requireSession(socket,session);
+    validators.requireSession(socket, session);
 
     // remove the clientId from sessionMap
     removeClient(sessionId, socket.userId);
@@ -111,8 +112,8 @@ function handleHostLeave(io, session, leavingUserId) {
 
 export const handleDisconnect = (io, socket) => {
     const sessions = getAllSessionsOfUser(socket.userId);
-    sessions.forEach(session=> {
-        leaveSession(io, socket, { sessionId:session.sessionId });
+    sessions.forEach(session => {
+        leaveSession(io, socket, { sessionId: session.sessionId });
     });
     clientRegistry.removeClient(socket);
 
@@ -122,7 +123,7 @@ export const handleDisconnect = (io, socket) => {
 export const setUrl = (io, socket, data) => {
     const { sessionId, url } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(socket,session)) {
+    if (!validators.requireSession(socket, session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
@@ -139,7 +140,7 @@ export const setUrl = (io, socket, data) => {
 export const play = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(socket,session)) {
+    if (!validators.requireSession(socket, session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
@@ -163,7 +164,7 @@ export const play = (io, socket, data) => {
 export const pause = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(socket,session)) {
+    if (!validators.requireSession(socket, session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
@@ -194,7 +195,7 @@ export const pause = (io, socket, data) => {
 export const stop = (io, socket, data) => {
     const { sessionId } = data;
     const session = get(sessionId);
-    if (!validators.requireSession(socket,session)) {
+    if (!validators.requireSession(socket, session)) {
         return;
     }
     if (!validators.requireHost(socket, session)) {
@@ -207,6 +208,23 @@ export const stop = (io, socket, data) => {
     session.startedAt = null;
 
     io.to(sessionId).emit(SERVER.STOP_SONG);
+}
+
+export const handlePing=(socket,data)=>{
+    const t1 = Date.now();
+
+    if(!data ||typeof data.id !=='number'){
+        return;
+    }
+    const {id,t0}=data;
+    const t2 = Date.now();
+
+    socket.emit(SERVER.PONG,{
+        id:id,
+        t0:t0,
+        t1:t1,
+        t2:t2
+    });
 }
 
 

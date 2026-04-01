@@ -5,7 +5,8 @@ export const CLIENT = {
     SET_URL: "set_url",
     PLAY: "play",
     PAUSE: "pause",
-    STOP: "stop"
+    STOP: "stop",
+    PING:"ping"
 };
 export const SERVER = {
     SESSION_CREATED: "session_created",
@@ -18,4 +19,5 @@ export const SERVER = {
     PAUSE_SONG: "pause_song",
     STOP_SONG: "stop_song",
     ERROR_MSG:"error_message",
+    PONG:"pong"
 };

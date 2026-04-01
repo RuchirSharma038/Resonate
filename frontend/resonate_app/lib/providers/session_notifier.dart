@@ -62,6 +62,50 @@ class SessionNotifier extends StateNotifier<SessionState> {
     socket.listen("host_changed", (data) {
       state = state.copyWith(hostId: data["hostId"]);
     });
+
+    //Session_state
+    socket.listen("session_state", (data) async {
+      final url = data["url"];
+      final serverState = data["state"];
+      final serverPos = data["position"];
+      final serverStartAt = data["startedAt"];
+
+      //Load the url
+      if (url != null) {
+        await audio.load(url);
+        state = state.copyWith(url: url);
+      }
+      if (serverState == "playing" && serverStartAt != null) {
+        final now = timeSync.getServerTime();
+        final elapsed = now - serverStartAt;
+        final livePosition = elapsed + serverPos;
+        await audio.seek(Duration(milliseconds: livePosition.toInt()));
+        await audio.play();
+
+        state = state.copyWith(
+          playbackState: PlaybackState.playing,
+          position: Duration(milliseconds: serverPos.toInt()),
+          startedAt: DateTime.fromMillisecondsSinceEpoch(serverStartAt),
+        );
+      } else if (serverState == "paused") {
+        final exactPosition = Duration(milliseconds: serverPos.toInt());
+        await audio.seek(exactPosition);
+        await audio.pause();
+
+        state = state.copyWith(
+          playbackState: PlaybackState.paused,
+          position: exactPosition,
+          startedAt: null,
+        );
+      } else {
+        await audio.stop();
+        state = state.copyWith(
+          playbackState: PlaybackState.stopped,
+          position: Duration.zero,
+          startedAt: null,
+        );
+      }
+    });
   }
 
   void _listenPlaybackEvents() {
