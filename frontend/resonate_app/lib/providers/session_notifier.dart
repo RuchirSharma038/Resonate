@@ -31,25 +31,32 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   void _listenConnection() {
+    // Connect
     socket.listen("connect", (_) {
       state = state.copyWith(isConnected: true);
     });
 
+    // Disconnect
     socket.listen("disconnect", (_) {
       state = state.copyWith(isConnected: false);
     });
   }
 
   void _listenSessionEvents() {
+    //Session_created
     socket.listen("session_created", (data) {
       state = state.copyWith(sessionId: data["sessionId"], isLoading: false);
     });
+
+    //User_joined
 
     socket.listen("user_joined", (data) {
       final updatedUsers = List<String>.from(state.participants)
         ..add(data["userId"]);
       state = state.copyWith(participants: updatedUsers);
     });
+
+    //User_left
 
     socket.listen("user_left", (data) {
       final updatedUsers = List<String>.from(
@@ -59,6 +66,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(participants: updatedUsers);
     });
 
+    //Host_changed
     socket.listen("host_changed", (data) {
       state = state.copyWith(hostId: data["hostId"]);
     });
@@ -69,6 +77,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       final serverState = data["state"];
       final serverPos = data["position"];
       final serverStartAt = data["startedAt"];
+      final hostId = data["hostId"];
 
       //Load the url
       if (url != null) {
@@ -86,6 +95,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
           playbackState: PlaybackState.playing,
           position: Duration(milliseconds: serverPos.toInt()),
           startedAt: DateTime.fromMillisecondsSinceEpoch(serverStartAt),
+          hostId: hostId,
         );
       } else if (serverState == "paused") {
         final exactPosition = Duration(milliseconds: serverPos.toInt());
@@ -96,6 +106,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
           playbackState: PlaybackState.paused,
           position: exactPosition,
           startedAt: null,
+          hostId: hostId,
         );
       } else {
         await audio.stop();
@@ -103,17 +114,22 @@ class SessionNotifier extends StateNotifier<SessionState> {
           playbackState: PlaybackState.stopped,
           position: Duration.zero,
           startedAt: null,
+          hostId: hostId,
         );
       }
     });
   }
 
+  //
+
   void _listenPlaybackEvents() {
+    //Song_updated
     socket.listen("song_updated", (data) async {
       await audio.load(data["url"]);
       state = state.copyWith(url: data["url"]);
     });
 
+    //play_song
     socket.listen("play_song", (data) async {
       final serverStartTime = data["startTime"];
       final basePosition = data["position"];
@@ -149,6 +165,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
       );
     });
 
+    //Pause song
+
     socket.listen("pause_song", (data) async {
       final serverPosition = (data["position"] as num).toDouble();
       final pauseTime = data["pauseTime"];
@@ -173,6 +191,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
       }
     });
 
+    //Stop Song
+
     socket.listen("stop_song", (_) async {
       await audio.stop();
       state = state.copyWith(
@@ -184,22 +204,27 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
   }
 
+  //Error
   void _listenErrorEvents() {
     socket.listen("error", (data) {
       state = state.copyWith(error: data["message"], isLoading: false);
     });
   }
 
+  //Create session
   void createSession() {
     state = state.copyWith(isLoading: true);
     controller.createSession();
   }
+
+  //Join session
 
   void joinSession(String sessionId) {
     state = state.copyWith(isLoading: true);
     controller.joinSession(sessionId);
   }
 
+  //Leave session
   void leaveSession() {
     if (state.sessionId.isEmpty) return;
 
@@ -208,6 +233,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     state = SessionState.initial();
   }
 
+  //set Url
   void setUrl(String url) {
     final error = _validateAudioUrl(url);
     if (error != null) {
@@ -219,23 +245,27 @@ class SessionNotifier extends StateNotifier<SessionState> {
     controller.setUrl(state.sessionId, url);
   }
 
+  //play
   void play() {
     if (state.sessionId.isEmpty) return;
 
     controller.playSong(state.sessionId);
   }
 
+  //pause
   void pause() {
     if (state.sessionId.isEmpty) return;
 
     controller.pause(state.sessionId);
   }
 
+  //stop
   void stop() {
     if (state.sessionId.isEmpty) return;
     controller.stop(state.sessionId);
   }
 
+  //Validate the url function
   String? _validateAudioUrl(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return "URL cannot be empty";

@@ -12,8 +12,8 @@ import timeUtils from "../utils/timeUtils.js";
 import idGenerator from "../utils/idGenerator.js";
 
 function isStaleCommand(session, seq) {
-    
-    if (typeof seq !== "number") return false; 
+
+    if (typeof seq !== "number") return false;
     if (seq <= session.lastCommandSeq) return true;
     session.lastCommandSeq = seq;
     return false;
@@ -71,6 +71,8 @@ export const joinSession = (io, socket, data) => {
         state: session.state,
         position: session.position,
         startedAt: session.startedAt,
+        hostId:session.hostUserId,
+        //userId:socket.userId
     });
 
 
@@ -111,6 +113,8 @@ function handleHostLeave(io, session, leavingUserId) {
         return;
     }
     const newHost = remainingUsers[0];
+    // Reset the sequence so the new host can start from 0/1
+    session.lastCommandSeq = -1;
     session.hostUserId = newHost;
     io.to(session.sessionId).emit("host_changed", {
         hostId: newHost
@@ -151,7 +155,7 @@ export const setUrl = (io, socket, data) => {
 }
 
 export const play = (io, socket, data) => {
-    const { sessionId,seq } = data;
+    const { sessionId, seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -159,7 +163,7 @@ export const play = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
-    if(isStaleCommand(session,seq))return;
+    if (isStaleCommand(session, seq)) return;
 
     if (session.state === "playing") {
         return;
@@ -176,7 +180,7 @@ export const play = (io, socket, data) => {
 }
 
 export const pause = (io, socket, data) => {
-    const { sessionId,seq } = data;
+    const { sessionId, seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -184,7 +188,7 @@ export const pause = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
-    if(isStaleCommand(session,seq))return;
+    if (isStaleCommand(session, seq)) return;
     if (session.state !== "playing") {
         return;
     }
@@ -208,7 +212,7 @@ export const pause = (io, socket, data) => {
 }
 
 export const stop = (io, socket, data) => {
-    const { sessionId,seq } = data;
+    const { sessionId, seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -216,7 +220,7 @@ export const stop = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
-    if(isStaleCommand(session,seq))return;
+    if (isStaleCommand(session, seq)) return;
 
     session.state = "stopped";
 
