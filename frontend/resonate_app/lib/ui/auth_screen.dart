@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonate_app/providers/auth_controller_provider.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
@@ -27,40 +28,42 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Future<void> _submitAuth() async {
-    // 1. Validate form fields
+    //  Validate form fields
     if (!_formKey.currentState!.validate()) return;
 
-    // 2. Unfocus keyboard for smooth UI
+    //  Unfocus keyboard for smooth UI
     FocusScope.of(context).unfocus();
 
-    // 3. Start loading spinner
+    // Start loading spinner
     setState(() => _isLoading = true);
 
     try {
       if (_isLogin) {
-        // TODO: Call the Riverpod Firebase Login Provider here
-        // await ref.read(authControllerProvider.notifier).login(
-        //   _emailController.text.trim(),
-        //   _passwordController.text.trim(),
-        // );
+        await ref
+            .read(authControllerProvider)
+            .login(
+              _emailController.text.trim(),
+              _passwordController.text.trim(),
+            );
 
         // Simulating network delay for UI testing
         await Future.delayed(const Duration(seconds: 2));
       } else {
-        // TODO: Call the Riverpod Firebase Signup Provider here
-        // await ref.read(authControllerProvider.notifier).signup(
-        //   _emailController.text.trim(),
-        //   _passwordController.text.trim(),
-        //   _nameController.text.trim(),
-        // );
+        await ref
+            .read(authControllerProvider)
+            .signup(
+              _emailController.text.trim(),
+              _passwordController.text.trim(),
+              _nameController.text.trim(),
+            );
 
         await Future.delayed(const Duration(seconds: 2));
       }
 
       // If successful,  Riverpod AuthStateProvider will automatically
-      // trigger a route change, so you don't need Navigator.push() here!
+      // trigger a route change, so I don't need Navigator.push() here!
     } catch (e) {
-      // 4. Smooth Error Handling via Snackbar
+      //Error Handling via Snackbar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -71,7 +74,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         );
       }
     } finally {
-      // 5. Stop loading spinner
+      // Stop loading spinner
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -137,7 +140,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     const SizedBox(height: 48),
 
                     // --- Form Fields ---
-                    // AnimatedSize makes the Name field slide in/out smoothly
                     AnimatedSize(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
