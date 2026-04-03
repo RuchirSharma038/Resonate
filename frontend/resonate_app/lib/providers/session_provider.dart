@@ -14,7 +14,8 @@ final socketServiceProvider = Provider<SocketService>((ref) {
 });
 
 final socketControllerProvider = Provider<SocketController>((ref) {
-  return SocketController();
+  final socket = ref.read(socketServiceProvider);
+  return SocketController(socket);
 });
 
 final timeSyncServiceProvider = Provider<TimeSyncService>((ref) {
@@ -36,7 +37,7 @@ final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((
   final socket = ref.read(socketServiceProvider);
   final controller = ref.read(socketControllerProvider);
   final audio = ref.read(audioServiceProvider);
-  final time = ref.read(timeSyncServiceProvider);
+  final timeSync = ref.read(timeSyncServiceProvider);
 
-  return SessionNotifier(controller, socket, audio, time);
+  return SessionNotifier(controller, socket, audio, timeSync);
 });

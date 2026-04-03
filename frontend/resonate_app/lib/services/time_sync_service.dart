@@ -10,59 +10,67 @@ class TimeSyncService {
   bool initialized = false;
 
   List<double> offsetBuffer = [];
-  int pingId = 0;
-  Map<int, int> pendingPings = {};
+  int _pingId = 0;
+  final Map<int, int> _pendingPings = {};
 
-  final int bufferSize = 5;
-
+  final int bufferSize = 8;
+  bool _initCalled = false;
   Timer? periodicTimer;
 
   void init() {
-    socket.listen('pong', (data) {
-      final id = data['id'];
-      if (!pendingPings.containsKey(id)) return;
-      final t0 = pendingPings[id]!;
-      pendingPings.remove(id);
-
-      final t1 = data['t1'];
-      final t2 = data['t2'];
-      final t3 = DateTime.now().millisecondsSinceEpoch;
-
-      final rtt = (t3 - t0) - (t2 - t1);
-      final offset = ((t1 - t0) + (t2 - t3)) / 2;
-
-      updateSync(rtt.toDouble(), offset.toDouble());
-    });
-    startInitialSync();
-    startPeriodicSync();
+    if (_initCalled) return;
+    _initCalled = true; // guards against double-init
+    socket.listen('pong', _onPong);
+    _startInitialSync();
+    _startPeriodicSync();
   }
 
-  void startInitialSync() async {
+  void dispose() {
+    periodicTimer?.cancel();
+    _pendingPings.clear();
+  }
+
+  void _onPong(dynamic data) {
+    final id = data['id'];
+    if (!_pendingPings.containsKey(id)) return;
+    final t0 = _pendingPings.remove(id)!;
+
+    final t1 = (data['t1'] as num).toDouble();
+    final t2 = (data['t2'] as num).toDouble();
+    final t3 = DateTime.now().millisecondsSinceEpoch.toDouble();
+
+    final rtt = (t3 - t0) - (t2 - t1);
+    final offset = ((t1 - t0) + (t2 - t3)) / 2;
+
+    _updateSync(rtt, offset);
+  }
+
+  void _startInitialSync() async {
     for (int i = 0; i < 5; i++) {
       await Future.delayed(Duration(milliseconds: 50 + (i * 20)));
       sendPing();
     }
   }
 
-  void startPeriodicSync() {
+  void _startPeriodicSync() {
     periodicTimer = Timer.periodic(Duration(seconds: 5), (_) {
       sendPing();
     });
   }
 
   void sendPing() {
-    final id = pingId++;
+    final id = _pingId++;
 
     final t0 = DateTime.now().millisecondsSinceEpoch;
-    pendingPings[id] = t0;
+    _pendingPings[id] = t0;
 
     socket.emit('ping', {'id': id, 't0': t0});
-    Future.delayed(Duration(seconds: 2), () {
-      pendingPings.remove(id);
+    Future.delayed(Duration(seconds: 3), () {
+      _pendingPings.remove(id);
     });
   }
 
-  void updateSync(double rtt, double offset) {
+  void _updateSync(double rtt, double offset) {
     if (rtt > 300) return;
 
     offsetBuffer.add(offset);
