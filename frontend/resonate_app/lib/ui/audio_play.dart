@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonate_app/providers/session_provider.dart';
 import 'package:resonate_app/providers/session_state.dart';
+import 'package:resonate_app/providers/auth_provider.dart';
 
 class AudioPlay extends ConsumerStatefulWidget {
   const AudioPlay({super.key});
@@ -11,14 +12,13 @@ class AudioPlay extends ConsumerStatefulWidget {
 }
 
 class _AudioPlayState extends ConsumerState<AudioPlay> {
-  final TextEditingController urlcontroller = TextEditingController();
+  final TextEditingController urlController = TextEditingController();
 
-  // ── local validation state ─────────────────────────────────────────────────
   String? _localUrlError;
 
   @override
   void dispose() {
-    urlcontroller.dispose();
+    urlController.dispose();
     super.dispose();
   }
 
@@ -44,13 +44,12 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
     }
   }
 
-  /// Client-side URL check — mirrors the notifier's _validateAudioUrl.
-  /// Runs on every keystroke so the user gets instant feedback.
+  /// Client-side URL check
   void _onUrlChanged(String value) {
     final trimmed = value.trim();
     setState(() {
       if (trimmed.isEmpty) {
-        _localUrlError = null; // don't nag on empty
+        _localUrlError = null;
         return;
       }
       final uri = Uri.tryParse(trimmed);
@@ -62,27 +61,13 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
         _localUrlError = "Must start with http:// or https://";
         return;
       }
-      const supported = [
-        '.mp3',
-        '.wav',
-        '.ogg',
-        '.flac',
-        '.aac',
-        '.m4a',
-        '.opus',
-        '.webm',
-      ];
-      final hasExt = supported.any((e) => uri.path.toLowerCase().contains(e));
-      if (!hasExt) {
-        _localUrlError = "Must be a direct link to an audio file";
-        return;
-      }
-      _localUrlError = null; // all good
+
+      _localUrlError = null;
     });
   }
 
   void _loadTrack(BuildContext context) {
-    final url = urlcontroller.text.trim();
+    final url = urlController.text.trim();
     if (url.isEmpty) return;
     if (_localUrlError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -99,9 +84,12 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
+    final myUserId = ref.watch(myUserIdProvider);
     final hasSession = session.sessionId.isNotEmpty;
 
-    // Show server-side errors from state (e.g. validation rejection)
+    final isHost =
+        hasSession && myUserId.isNotEmpty && session.hostId == myUserId;
+
     ref.listen(sessionProvider, (prev, next) {
       if (next.error != null && prev?.error != next.error) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +107,6 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
         centerTitle: true,
         elevation: 0,
         actions: [
-          // Leave session button
           if (hasSession)
             IconButton(
               icon: const Icon(Icons.exit_to_app),
@@ -139,182 +126,272 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
             end: Alignment.bottomCenter,
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
 
-              // ICON
-              const CircleAvatar(
-                radius: 45,
-                backgroundColor: Colors.white24,
-                child: Icon(Icons.music_note, size: 50, color: Colors.white),
-              ),
+        child: CustomScrollView(
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
 
-              const SizedBox(height: 20),
-
-              // SESSION CARD
-              Card(
-                color: Colors.white10,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _infoRow(
-                        "Session",
-                        session.sessionId.isEmpty
-                            ? "Not joined"
-                            : session.sessionId,
+                    // ICON
+                    const CircleAvatar(
+                      radius: 45,
+                      backgroundColor: Colors.white24,
+                      child: Icon(
+                        Icons.music_note,
+                        size: 50,
+                        color: Colors.white,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "State",
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: _statusColor(session.playbackState),
-                                  shape: BoxShape.circle,
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // SESSION CARD
+                    Card(
+                      color: Colors.white10,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            _infoRow(
+                              "Session",
+                              session.sessionId.isEmpty
+                                  ? "Not joined"
+                                  : session.sessionId,
+                            ),
+                            const SizedBox(height: 8),
+                            if (hasSession) ...[
+                              _infoRow(
+                                "Role",
+                                isHost ? "Host" : "Listener",
+                                valueStyle: TextStyle(
+                                  color: isHost
+                                      ? Colors.greenAccent
+                                      : Colors.white70,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _statusLabel(session.playbackState),
-                                style: const TextStyle(color: Colors.white),
+                              const SizedBox(height: 8),
+                            ],
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  "State",
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: _statusColor(
+                                          session.playbackState,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _statusLabel(session.playbackState),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _infoRow(
+                              "Users",
+                              session.participants.length.toString(),
+                            ),
+                            if (session.url != null) ...[
+                              const SizedBox(height: 8),
+                              _infoRow(
+                                "Track",
+                                session.url!,
+                                valueStyle: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
                               ),
                             ],
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 25),
+
+                    // URL INPUT
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: isHost
+                          ? null
+                          : () => _handleHostAction(isHost, () {}),
+                      child: AbsorbPointer(
+                        absorbing: !isHost,
+                        child: TextField(
+                          controller: urlController,
+                          onChanged: _onUrlChanged,
+                          enabled: isHost,
+                          style: TextStyle(
+                            color: isHost ? Colors.white : Colors.white38,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: isHost
+                                ? 'https://example.com/track.mp3'
+                                : 'Waiting for host...',
+                            hintStyle: const TextStyle(
+                              color: Colors.white38,
+                              fontSize: 13,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.link,
+                              color: isHost ? Colors.white70 : Colors.white24,
+                            ),
+                            errorText: _localUrlError,
+                            errorStyle: const TextStyle(
+                              color: Colors.orangeAccent,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white10,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: _localUrlError != null
+                                  ? const BorderSide(color: Colors.orangeAccent)
+                                  : BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    // LOAD BUTTON
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          backgroundColor:
+                              (hasSession &&
+                                  isHost &&
+                                  _localUrlError == null &&
+                                  urlController.text.trim().isNotEmpty)
+                              ? Colors.deepPurpleAccent
+                              : Colors.white24,
+                        ),
+                        onPressed: hasSession
+                            ? () => _handleHostAction(isHost, () {
+                                if (_localUrlError == null) _loadTrack(context);
+                              })
+                            : null,
+                        child: Text(
+                          "Load Track",
+                          style: TextStyle(
+                            color: (hasSession && isHost)
+                                ? Colors.white
+                                : Colors.white54,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const Expanded(child: SizedBox(height: 20)),
+
+                    // PLAYBACK CONTROLS
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          IconButton(
+                            iconSize: 36,
+                            tooltip: "Play",
+                            icon: Icon(
+                              Icons.play_arrow,
+                              color: (hasSession && isHost)
+                                  ? Colors.white
+                                  : Colors.white24,
+                            ),
+                            onPressed: hasSession
+                                ? () => _handleHostAction(
+                                    isHost,
+                                    () => ref
+                                        .read(sessionProvider.notifier)
+                                        .play(),
+                                  )
+                                : null,
+                          ),
+                          IconButton(
+                            iconSize: 36,
+                            tooltip: "Pause",
+                            icon: Icon(
+                              Icons.pause,
+                              color: (hasSession && isHost)
+                                  ? Colors.white
+                                  : Colors.white24,
+                            ),
+                            onPressed: hasSession
+                                ? () => _handleHostAction(
+                                    isHost,
+                                    () => ref
+                                        .read(sessionProvider.notifier)
+                                        .pause(),
+                                  )
+                                : null,
+                          ),
+                          IconButton(
+                            iconSize: 36,
+                            tooltip: "Stop",
+                            icon: Icon(
+                              Icons.stop,
+                              color: (hasSession && isHost)
+                                  ? Colors.white
+                                  : Colors.white24,
+                            ),
+                            onPressed: hasSession
+                                ? () => _handleHostAction(
+                                    isHost,
+                                    () => ref
+                                        .read(sessionProvider.notifier)
+                                        .stop(),
+                                  )
+                                : null,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      _infoRow("Users", session.participants.length.toString()),
-                      if (session.url != null) ...[
-                        const SizedBox(height: 8),
-                        _infoRow(
-                          "Track",
-                          session.url!,
-                          valueStyle: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // URL INPUT
-              TextField(
-                controller: urlcontroller,
-                onChanged: _onUrlChanged,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'https://example.com/track.mp3',
-                  hintStyle: const TextStyle(
-                    color: Colors.white38,
-                    fontSize: 13,
-                  ),
-                  prefixIcon: const Icon(Icons.link, color: Colors.white70),
-                  // Show inline validation error in real-time
-                  errorText: _localUrlError,
-                  errorStyle: const TextStyle(color: Colors.orangeAccent),
-                  filled: true,
-                  fillColor: Colors.white10,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: _localUrlError != null
-                        ? const BorderSide(color: Colors.orangeAccent)
-                        : BorderSide.none,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 15),
-
-              // LOAD BUTTON
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
                     ),
-                    // Grey out if not in session or local validation failed
-                    backgroundColor: (hasSession && _localUrlError == null)
-                        ? null
-                        : Colors.white24,
-                  ),
-                  onPressed: (hasSession && _localUrlError == null)
-                      ? () => _loadTrack(context)
-                      : null,
-                  child: const Text("Load Track"),
-                ),
-              ),
 
-              const Spacer(),
-
-              // PLAYBACK CONTROLS
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white10,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(
-                      iconSize: 36,
-                      tooltip: "Play",
-                      icon: const Icon(Icons.play_arrow, color: Colors.white),
-                      onPressed: hasSession
-                          ? () => ref.read(sessionProvider.notifier).play()
-                          : null,
-                    ),
-                    IconButton(
-                      iconSize: 36,
-                      tooltip: "Pause",
-                      icon: const Icon(Icons.pause, color: Colors.white),
-                      onPressed: hasSession
-                          ? () => ref.read(sessionProvider.notifier).pause()
-                          : null,
-                    ),
-                    IconButton(
-                      iconSize: 36,
-                      tooltip: "Stop",
-                      icon: const Icon(Icons.stop, color: Colors.white),
-                      // Stop button is always accessible when in a session
-                      onPressed: hasSession
-                          ? () => ref.read(sessionProvider.notifier).stop()
-                          : null,
-                    ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -322,17 +399,35 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
 
   Widget _infoRow(String label, String value, {TextStyle? valueStyle}) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: const TextStyle(color: Colors.white70)),
-        Flexible(
+        const SizedBox(width: 16),
+        Expanded(
           child: Text(
             value,
             style: valueStyle ?? const TextStyle(color: Colors.white),
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
           ),
         ),
       ],
     );
+  }
+
+  void _handleHostAction(bool isHost, VoidCallback hostAction) {
+    if (isHost) {
+      hostAction();
+    } else {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Only the host can perform this action."),
+          backgroundColor: Colors.orangeAccent,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }
