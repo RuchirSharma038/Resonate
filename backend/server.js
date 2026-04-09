@@ -19,7 +19,7 @@ io.use(authMiddleware);
 
 socketHandler(io);
 
-server.listen(3001, () => {
+server.listen(3001,'0.0.0.0', () => {
     console.log("Server is running...");
 })
 

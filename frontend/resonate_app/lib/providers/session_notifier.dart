@@ -45,15 +45,22 @@ class SessionNotifier extends StateNotifier<SessionState> {
   void _listenSessionEvents() {
     //Session_created
     socket.listen("session_created", (data) {
-      state = state.copyWith(sessionId: data["sessionId"], isLoading: false);
+      state = state.copyWith(
+        sessionId: data["sessionId"],
+        hostId: data["hostId"],
+        participants: [data["hostId"]],
+        isLoading: false,
+      );
     });
 
     //User_joined
 
     socket.listen("user_joined", (data) {
-      final updatedUsers = List<String>.from(state.participants)
-        ..add(data["userId"]);
-      state = state.copyWith(participants: updatedUsers);
+      final userId = data["userId"] as String;
+      if (!state.participants.contains(userId)) {
+        final updatedUsers = List<String>.from(state.participants)..add(userId);
+        state = state.copyWith(participants: updatedUsers);
+      }
     });
 
     //User_left
@@ -78,6 +85,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
       final serverPos = data["position"];
       final serverStartAt = data["startedAt"];
       final hostId = data["hostId"];
+      final sessionId = data["sessionId"]; // Might be null for older backend version
+      final participants = data["participants"];
+
+      state = state.copyWith(
+        sessionId: sessionId ?? state.sessionId,
+        participants: participants != null ? List<String>.from(participants) : state.participants,
+        isLoading: false,
+      );
 
       //Load the url
       if (url != null) {
@@ -131,8 +146,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
     //play_song
     socket.listen("play_song", (data) async {
-      final serverStartTime = data["startTime"];
-      final basePosition = data["position"];
+      final serverStartTime = (data["startTime"] as num).toInt();
+      final basePosition = (data["position"] as num).toInt();
       final now = timeSync.getServerTime();
       final timeUntilPlay = serverStartTime - now;
       if (timeUntilPlay > 0) {
@@ -206,7 +221,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   //Error
   void _listenErrorEvents() {
-    socket.listen("error", (data) {
+    socket.listen("error_message", (data) {
       state = state.copyWith(error: data["message"], isLoading: false);
     });
   }

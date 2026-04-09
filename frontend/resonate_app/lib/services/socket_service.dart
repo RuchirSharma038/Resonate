@@ -1,5 +1,6 @@
 // ignore: library_prefixes
 import 'package:firebase_auth/firebase_auth.dart';
+// ignore: library_prefixes
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 //import 'dart:async';
 
@@ -13,20 +14,24 @@ class SocketService {
 
   late IO.Socket socket;
 
+  SocketService() {
+    socket = IO.io(
+      "http://192.168.0.101:3001",
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .disableAutoConnect()
+          .build(),
+    );
+  }
+
   Future<void> connect() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final idToken = await user.getIdToken();
 
-    socket = IO.io(
-      "http://YOUR_SERVER_IP:3000",
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .disableAutoConnect()
-          .setAuth({'token': idToken})
-          .build(),
-    );
+    socket.io.options?['auth'] = {'token': idToken};
+    socket.auth = {'token': idToken};
     socket.connect();
 
     socket.onConnect((_) {

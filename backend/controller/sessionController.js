@@ -67,12 +67,13 @@ export const joinSession = (io, socket, data) => {
     //     : session.position;
 
     socket.emit(SERVER.SESSION_STATE, {
+        sessionId: session.sessionId,
         url: session.trackUrl,
         state: session.state,
         position: session.position,
         startedAt: session.startedAt,
         hostId:session.hostUserId,
-        //userId:socket.userId
+        participants: Array.from(session.clients.keys())
     });
 
 
