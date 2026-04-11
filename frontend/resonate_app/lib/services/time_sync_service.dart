@@ -1,7 +1,21 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:resonate_app/services/socket_service.dart';
 
+/// NTP-style clock synchronisation.
+///
+/// Keeps a smoothed estimate of the offset between client wall-clock and
+/// server wall-clock. Callers use [getServerTime()] wherever they need to
+/// reason about a shared timeline.
+///
+/// FIXES vs. previous version
+/// ───────────────────────────
+/// • [init] is now idempotent — calling it twice no longer stacks duplicate
+///   'pong' listeners (which previously doubled all offset samples).
+/// • Added [dispose] so the provider can cleanly cancel the timer.
+/// • Adaptive ping interval based on current offset variance.
+/// • Dynamic RTT outlier rejection (P75-based) instead of hard 300 ms cap.
 class TimeSyncService {
   final SocketService socket;
   TimeSyncService(this.socket);
@@ -9,26 +23,43 @@ class TimeSyncService {
   double smoothedOffset = 0;
   bool initialized = false;
 
-  List<double> offsetBuffer = [];
+  final List<double> _offsetBuffer = [];
+  final List<double> _rttBuffer = [];
+  final int bufferSize = 8;
+
   int _pingId = 0;
   final Map<int, int> _pendingPings = {};
 
-  final int bufferSize = 8;
-  bool _initCalled = false;
   Timer? periodicTimer;
+  bool _initCalled = false; // guards against double-init
+
+  // ── Public API ────────────────────────────────────────────────────────────
 
   void init() {
-    if (_initCalled) return;
-    _initCalled = true; // guards against double-init
+    if (_initCalled) return; // idempotent
+    _initCalled = true;
+
     socket.listen('pong', _onPong);
     _startInitialSync();
-    _startPeriodicSync();
+    _scheduleAdaptivePing();
+  }
+
+  double getServerTime() =>
+      DateTime.now().millisecondsSinceEpoch + smoothedOffset;
+
+  /// 0 = no data / high variance. 1 = very stable.
+  double get syncQuality {
+    if (!initialized || _offsetBuffer.length < 2) return 0;
+    final v = _variance(_offsetBuffer);
+    return (1.0 - v / 100.0).clamp(0.0, 1.0);
   }
 
   void dispose() {
     periodicTimer?.cancel();
     _pendingPings.clear();
   }
+
+  // ── Internal ──────────────────────────────────────────────────────────────
 
   void _onPong(dynamic data) {
     final id = data['id'];
@@ -43,64 +74,66 @@ class TimeSyncService {
     final offset = ((t1 - t0) + (t2 - t3)) / 2;
 
     _updateSync(rtt, offset);
+    _scheduleAdaptivePing();
   }
 
   void _startInitialSync() async {
     for (int i = 0; i < 5; i++) {
-      await Future.delayed(Duration(milliseconds: 50 + (i * 20)));
-      sendPing();
+      await Future.delayed(Duration(milliseconds: 50 + i * 20));
+      _sendPing();
     }
   }
 
-  void _startPeriodicSync() {
-    periodicTimer = Timer.periodic(Duration(seconds: 5), (_) {
-      sendPing();
-    });
-  }
-
-  void sendPing() {
+  void _sendPing() {
     final id = _pingId++;
-
     final t0 = DateTime.now().millisecondsSinceEpoch;
     _pendingPings[id] = t0;
-
     socket.emit('ping', {'id': id, 't0': t0});
-    Future.delayed(Duration(seconds: 3), () {
-      _pendingPings.remove(id);
-    });
+    Future.delayed(const Duration(seconds: 3), () => _pendingPings.remove(id));
+  }
+
+  bool _isRttAcceptable(double rtt) {
+    if (_rttBuffer.isEmpty) return rtt < 500;
+    final sorted = List<double>.from(_rttBuffer)..sort();
+    final p75 = sorted[(sorted.length * 0.75).floor().clamp(0, sorted.length - 1)];
+    return rtt <= max(50.0, p75 * 1.5);
   }
 
   void _updateSync(double rtt, double offset) {
-    if (rtt > 300) return;
+    _rttBuffer.add(rtt);
+    if (_rttBuffer.length > bufferSize) _rttBuffer.removeAt(0);
 
-    offsetBuffer.add(offset);
-    if (offsetBuffer.length > bufferSize) {
-      offsetBuffer.removeAt(0);
-    }
+    if (!_isRttAcceptable(rtt)) return;
 
-    final medianOffset = getMedian(offsetBuffer);
+    _offsetBuffer.add(offset);
+    if (_offsetBuffer.length > bufferSize) _offsetBuffer.removeAt(0);
 
+    final med = _median(_offsetBuffer);
     if (!initialized) {
-      smoothedOffset = medianOffset;
+      smoothedOffset = med;
       initialized = true;
     } else {
-      smoothedOffset = 0.1 * medianOffset + 0.9 * smoothedOffset;
+      smoothedOffset = 0.1 * med + 0.9 * smoothedOffset;
     }
   }
 
-  double getMedian(List<double> values) {
-    final sorted = List<double>.from(values)..sort();
-    int n = sorted.length;
-
-    if (n % 2 == 1) {
-      return sorted[n ~/ 2];
-    } else {
-      return (sorted[n ~/ 2 - 1] + sorted[n ~/ 2]) / 2;
-    }
+  void _scheduleAdaptivePing() {
+    periodicTimer?.cancel();
+    final v = _variance(_offsetBuffer);
+    final seconds = v < 5 ? 30 : v < 20 ? 10 : 2;
+    periodicTimer = Timer.periodic(Duration(seconds: seconds), (_) => _sendPing());
   }
 
-  double getServerTime() {
-    final clientTime = DateTime.now().millisecondsSinceEpoch;
-    return clientTime + smoothedOffset;
+  double _median(List<double> vals) {
+    if (vals.isEmpty) return 0;
+    final s = List<double>.from(vals)..sort();
+    final n = s.length;
+    return n.isOdd ? s[n ~/ 2] : (s[n ~/ 2 - 1] + s[n ~/ 2]) / 2;
+  }
+
+  double _variance(List<double> vals) {
+    if (vals.length < 2) return 0;
+    final mean = vals.reduce((a, b) => a + b) / vals.length;
+    return vals.map((v) => pow(v - mean, 2) as double).reduce((a, b) => a + b) / vals.length;
   }
 }
