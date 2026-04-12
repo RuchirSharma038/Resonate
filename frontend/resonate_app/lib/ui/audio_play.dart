@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonate_app/providers/session_provider.dart';
 import 'package:resonate_app/providers/session_state.dart';
 import 'package:resonate_app/providers/auth_provider.dart';
+import 'package:resonate_app/providers/audioservice_provider.dart';
 
 class AudioPlay extends ConsumerStatefulWidget {
   const AudioPlay({super.key});
@@ -42,6 +43,76 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
       case PlaybackState.stopped:
         return "Stopped";
     }
+  }
+
+  String _formatDuration(Duration d) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    final twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
+    final twoDigitSeconds = twoDigits(d.inSeconds.remainder(60));
+    if (d.inHours > 0) {
+      return "${d.inHours}:$twoDigitMinutes:$twoDigitSeconds";
+    }
+    return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  Widget _buildSeekBar(bool isHost, bool hasSession) {
+    final player = ref.read(audioServiceProvider).player;
+    return StreamBuilder<Duration?>(
+      stream: player.positionStream,
+      builder: (context, posSnap) {
+        return StreamBuilder<Duration?>(
+          stream: player.durationStream,
+          builder: (context, durSnap) {
+            final position = posSnap.data ?? Duration.zero;
+            final duration = durSnap.data ?? Duration.zero;
+
+            double posValue = position.inMilliseconds.toDouble();
+            double durValue = duration.inMilliseconds.toDouble();
+            if (posValue > durValue && durValue > 0) posValue = durValue;
+
+            return Column(
+              children: [
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                    activeTrackColor: Colors.deepPurpleAccent,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.deepPurpleAccent,
+                  ),
+                  child: Slider(
+                    min: 0.0,
+                    max: durValue > 0 ? durValue : 1.0,
+                    value: posValue <= (durValue > 0 ? durValue : 1.0) ? posValue : 0.0,
+                    onChanged: (val) {
+                      if (!isHost || !hasSession) {
+                        _handleHostAction(isHost, () {});
+                        return;
+                      }
+                    },
+                    onChangeEnd: (val) {
+                      if (!isHost || !hasSession) return;
+                      ref.read(sessionProvider.notifier).seek(val.toInt());
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(_formatDuration(position), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text(_formatDuration(duration), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   /// Client-side URL check
@@ -317,6 +388,10 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                     ),
 
                     const Expanded(child: SizedBox(height: 20)),
+
+                    // SEEK BAR
+                    _buildSeekBar(isHost, hasSession),
+                    const SizedBox(height: 10),
 
                     // PLAYBACK CONTROLS
                     Container(
