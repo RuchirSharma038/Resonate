@@ -33,10 +33,10 @@ export default function socketHandler(io) {
       /*
         PING event
       */
-     socket.on(CLIENT.PING,(data)=>{
-      sessionController.handlePing(socket,data);
-     });
-      
+      socket.on(CLIENT.PING, (data) => {
+        sessionController.handlePing(socket, data);
+      });
+
 
       /*
         PLAYBACK EVENTS (HOST ONLY)
@@ -56,6 +56,10 @@ export default function socketHandler(io) {
 
       socket.on(CLIENT.STOP, (data) => {
         sessionController.stop(io, socket, data);
+      });
+
+      socket.on(CLIENT.SEEK, (data) => {
+        sessionController.seek(io, socket, data);
       });
 
       /*

@@ -6,6 +6,7 @@ export const CLIENT = {
     PLAY: "play",
     PAUSE: "pause",
     STOP: "stop",
+    SEEK:"seek",
     PING:"ping"
 };
 export const SERVER = {
@@ -18,6 +19,7 @@ export const SERVER = {
     PLAY_SONG: "play_song",
     PAUSE_SONG: "pause_song",
     STOP_SONG: "stop_song",
+    SEEK_SONG:"seek_song",
     ERROR_MSG:"error_message",
     PONG:"pong"
 };
