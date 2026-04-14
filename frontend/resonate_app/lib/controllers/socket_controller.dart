@@ -46,4 +46,7 @@ class SocketController {
   void stop(String sessionId) {
     socketService.emit("stop", {"sessionId": sessionId, "seq": _nextSeq()});
   }
+  void seek(String sessionId, int position) {
+    socketService.emit("seek", {"sessionId": sessionId, "position": position, "seq": _nextSeq()});
+  }
 }
