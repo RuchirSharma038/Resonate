@@ -2,13 +2,10 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:resonate_app/providers/audio_service.dart';
 import 'package:resonate_app/services/time_sync_service.dart';
-//import 'package:resonate_app/models/session_model.dart';
 import '../services/socket_service.dart';
 import './session_state.dart';
-
 import '../controllers/socket_controller.dart';
-
-//import './session_state.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SessionNotifier extends StateNotifier<SessionState> {
   final SocketController controller;
@@ -17,33 +14,40 @@ class SessionNotifier extends StateNotifier<SessionState> {
   final TimeSyncService timeSync;
 
   SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
-    : super(SessionState.initial()) {
+      : super(SessionState.initial()) {
     _init();
   }
 
-  //INIT
   void _init() {
     controller.init();
     _listenConnection();
     _listenSessionEvents();
     _listenPlaybackEvents();
     _listenErrorEvents();
+
+    audio.onSongComplete = () {
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+      final isHost = (state.hostId != null) && (state.hostId == currentUserId);
+
+      if (isHost && state.sessionId.isNotEmpty) {
+        // Tells the backend to skip to the next song!
+        controller.playNext(state.sessionId);
+      }
+    };
   }
 
   void _listenConnection() {
-    // Connect
     socket.listen("connect", (_) {
       state = state.copyWith(isConnected: true);
     });
 
-    // Disconnect
     socket.listen("disconnect", (_) {
       state = state.copyWith(isConnected: false);
     });
   }
 
   void _listenSessionEvents() {
-    //Session_created
     socket.listen("session_created", (data) {
       state = state.copyWith(
         sessionId: data["sessionId"],
@@ -53,8 +57,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
       );
     });
 
-    //User_joined
-
     socket.listen("user_joined", (data) {
       final userId = data["userId"] as String;
       if (!state.participants.contains(userId)) {
@@ -62,8 +64,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
         state = state.copyWith(participants: updatedUsers);
       }
     });
-
-    //User_left
 
     socket.listen("user_left", (data) {
       final updatedUsers = List<String>.from(
@@ -73,28 +73,30 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(participants: updatedUsers);
     });
 
-    //Host_changed
     socket.listen("host_changed", (data) {
       state = state.copyWith(hostId: data["hostId"]);
     });
 
-    //Session_state
     socket.listen("session_state", (data) async {
       final url = data["url"];
       final serverState = data["state"];
       final serverPos = data["position"];
       final serverStartAt = data["startedAt"];
       final hostId = data["hostId"];
-      final sessionId = data["sessionId"]; // Might be null for older backend version
+      final sessionId = data["sessionId"];
       final participants = data["participants"];
+
+      // 1. GRAB THE QUEUE FROM THE SERVER STATE
+      final queueRaw = data["queue"];
 
       state = state.copyWith(
         sessionId: sessionId ?? state.sessionId,
         participants: participants != null ? List<String>.from(participants) : state.participants,
+        // Save the initial queue!
+        queue: queueRaw != null ? List<String>.from(queueRaw) : state.queue,
         isLoading: false,
       );
 
-      //Load the url
       if (url != null) {
         await audio.load(url);
         state = state.copyWith(url: url);
@@ -135,21 +137,28 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
   }
 
-  //
-
   void _listenPlaybackEvents() {
-    //Song_updated
     socket.listen("song_updated", (data) async {
       await audio.load(data["url"]);
       state = state.copyWith(url: data["url"]);
     });
 
-    //play_song
+    // ==========================================
+    // 2. THE QUEUE LISTENER (Catches real-time updates)
+    // ==========================================
+    socket.listen("queue_updated", (data) {
+      if (data != null) {
+        final updatedQueue = List<String>.from(data);
+        state = state.copyWith(queue: updatedQueue);
+      }
+    });
+
     socket.listen("play_song", (data) async {
       final serverStartTime = (data["startTime"] as num).toInt();
       final basePosition = (data["position"] as num).toInt();
       final now = timeSync.getServerTime();
       final timeUntilPlay = serverStartTime - now;
+
       if (timeUntilPlay > 0) {
         await audio.seek(Duration(milliseconds: basePosition.toInt()));
         await Future.delayed(Duration(milliseconds: timeUntilPlay.toInt()));
@@ -180,8 +189,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
       );
     });
 
-    //Pause song
-
     socket.listen("pause_song", (data) async {
       final serverPosition = (data["position"] as num).toDouble();
       final pauseTime = data["pauseTime"];
@@ -206,81 +213,70 @@ class SessionNotifier extends StateNotifier<SessionState> {
       }
     });
 
-    //Stop Song
-
     socket.listen("stop_song", (_) async {
       await audio.stop();
       state = state.copyWith(
         playbackState: PlaybackState.stopped,
         position: Duration.zero,
-
         clearStartedAt: true,
       );
     });
   }
 
-  //Error
   void _listenErrorEvents() {
     socket.listen("error_message", (data) {
       state = state.copyWith(error: data["message"], isLoading: false);
     });
   }
 
-  //Create session
   void createSession() {
     state = state.copyWith(isLoading: true);
     controller.createSession();
   }
-
-  //Join session
 
   void joinSession(String sessionId) {
     state = state.copyWith(isLoading: true);
     controller.joinSession(sessionId);
   }
 
-  //Leave session
   void leaveSession() {
     if (state.sessionId.isEmpty) return;
-
     controller.leaveSession(state.sessionId);
-
     state = SessionState.initial();
   }
 
-  //set Url
   void setUrl(String url) {
     final error = _validateAudioUrl(url);
     if (error != null) {
       state = state.copyWith(error: error);
       return;
     }
-
     state = state.copyWith(error: null, clearError: true);
     controller.setUrl(state.sessionId, url);
   }
 
-  //play
   void play() {
     if (state.sessionId.isEmpty) return;
-
     controller.playSong(state.sessionId);
   }
 
-  //pause
   void pause() {
     if (state.sessionId.isEmpty) return;
-
     controller.pause(state.sessionId);
   }
 
-  //stop
   void stop() {
     if (state.sessionId.isEmpty) return;
     controller.stop(state.sessionId);
   }
 
-  //Validate the url function
+  // ==========================================
+  // 3. MANUAL QUEUE UPDATE FUNCTION
+  // ==========================================
+  void updateQueue(List<String> newQueue) {
+    state = state.copyWith(queue: newQueue);
+  }
+
   String? _validateAudioUrl(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return "URL cannot be empty";
@@ -297,14 +293,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     }
 
     const supported = [
-      '.mp3',
-      '.wav',
-      '.ogg',
-      '.flac',
-      '.aac',
-      '.m4a',
-      '.opus',
-      '.webm',
+      '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.opus', '.webm',
     ];
     final pathLower = uri.path.toLowerCase();
     final hasExtension = supported.any((ext) => pathLower.contains(ext));
@@ -312,7 +301,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       return "URL must point to a supported audio file (mp3, wav, ogg, flac, aac, m4a, opus, webm)";
     }
 
-    return null; // valid
+    return null;
   }
 
   Duration getCurrentPosition() {

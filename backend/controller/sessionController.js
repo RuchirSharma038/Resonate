@@ -6,7 +6,7 @@
 
 import { SERVER } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
-import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser } from "../services/sessionManager.js";
+import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser,addToQueueService, playNextTrack } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
 import timeUtils from "../utils/timeUtils.js";
 import idGenerator from "../utils/idGenerator.js";
@@ -73,7 +73,9 @@ export const joinSession = (io, socket, data) => {
         position: session.position,
         startedAt: session.startedAt,
         hostId:session.hostUserId,
-        participants: Array.from(session.clients.keys())
+        participants: Array.from(session.clients.keys()),
+
+        queue: session.queue || []
     });
 
 
@@ -248,8 +250,62 @@ export const handlePing = (socket, data) => {
     });
 }
 
+export const addToQueue = (io, socket, data) => {
+    const { sessionId, url } = data;
+    const session = get(sessionId);
 
+    // Ensure session exists and URL is valid
+    if (!validators.requireSession(socket, session)) return;
+    if (!validators.requireValidUrl(socket, url)) return;
 
+    const updatedQueue = addToQueueService(sessionId, url);
+    if (updatedQueue) {
+        // Broadcast the new queue to everyone
+        io.to(sessionId).emit(SERVER.QUEUE_UPDATED, updatedQueue);
+    }
+};
+
+export const playNext = (io, socket, data) => {
+    const { sessionId, seq } = data;
+    const session = get(sessionId);
+
+    if (!validators.requireSession(socket, session)) return;
+    if (!validators.requireHost(socket, session)) return; // Only host can skip/auto-play next!
+    if (isStaleCommand(session, seq)) return;
+
+    const nextData = playNextTrack(sessionId);
+
+    if (nextData) {
+        // Compute the precise synchronized start time for the new track
+        const startTime = timeUtils.computeStartTime();
+        session.startedAt = startTime;
+
+        // 1. Tell everyone what the new song URL is
+        io.to(sessionId).emit(SERVER.SONG_UPDATED, { url: nextData.trackUrl });
+
+        // 2. Send the updated (shorter) queue
+        io.to(sessionId).emit(SERVER.QUEUE_UPDATED, nextData.queue);
+
+        // 3. Immediately command all devices to start playing from position 0
+        io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime, position: 0 });
+    }
+};
+export const removeFromQueue = (io, socket, data) => {
+    const { sessionId, url } = data;
+    const session = get(sessionId);
+
+    // 1. Ensure the session exists
+    if (!validators.requireSession(socket, session)) return;
+    if (!session.queue || session.queue.length === 0) return;
+
+    // 2. Filter the deleted URL out of the queue array
+    // (This keeps all songs that do NOT match the deleted URL)
+    session.queue = session.queue.filter(trackUrl => trackUrl !== url);
+
+    // 3. Broadcast the fresh, updated list back to every phone in the room
+    // Note: Make sure SERVER.QUEUE_UPDATED is used (or just "queue_updated" if you hardcoded it)
+    io.to(sessionId).emit(SERVER.QUEUE_UPDATED, session.queue);
+};
 
 
 

@@ -38,7 +38,30 @@ export const getAllSessionsOfUser=(userId)=>{
     }
     return result;
 }
+export const addToQueueService = (sessionId, url) => {
+    const session = sessions.get(sessionId);
+    if (!session) return null;
 
+    if (!session.queue) session.queue = [];
+
+    session.queue.push(url);
+    return session.queue;
+}
+
+export const playNextTrack = (sessionId) => {
+    const session = sessions.get(sessionId);
+
+
+    if (!session || !session.queue || session.queue.length === 0) {
+        return null;
+    }
+    const nextUrl = session.queue.shift();
+    session.trackUrl = nextUrl;
+    session.position = 0;
+    session.state = "playing";
+
+    return { trackUrl: nextUrl, queue: session.queue };
+}
 
 
 
