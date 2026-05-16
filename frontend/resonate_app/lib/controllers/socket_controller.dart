@@ -75,4 +75,8 @@ class SocketController {
       'url': url,
     });
   }
+
+  void seek(String sessionId, int position) {
+    socketService.emit("seek", {"sessionId": sessionId, "position": position, "seq": _nextSeq()});
+  }
 }

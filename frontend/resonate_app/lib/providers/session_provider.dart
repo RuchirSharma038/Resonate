@@ -23,9 +23,9 @@ final timeSyncServiceProvider = Provider<TimeSyncService>((ref) {
   final ts = TimeSyncService(socket);
   ts.init();
 
-  // Stop timers if this provider is disposed
+  
   ref.onDispose(() {
-    ts.periodicTimer?.cancel();
+    ts.dispose();
   });
 
   return ts;

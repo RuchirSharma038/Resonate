@@ -233,6 +233,37 @@ export const stop = (io, socket, data) => {
     io.to(sessionId).emit(SERVER.STOP_SONG);
 }
 
+export const seek = (io, socket, data) => {
+    const { sessionId, position, seq } = data;
+    const session = get(sessionId);
+    if (!validators.requireSession(socket, session)) {
+        return;
+    }
+    if (!validators.requireHost(socket, session)) {
+        return;
+    }
+    if (isStaleCommand(session, seq)) return;
+    if (typeof position !== "number" || position < 0) {
+        socket.emit(SERVER.ERROR_MSG, { message: "Invalid seek position" });
+        return;
+    }
+    session.position = position;
+    if (session.state === "playing") {
+        // Re-schedule playback with a fresh start time and the new position
+        const startTime = timeUtils.computeStartTime();
+        session.startedAt = startTime;
+        io.to(sessionId).emit(SERVER.PLAY_SONG, {
+            startTime,
+            position: session.position
+        });
+    } else {
+        // Paused/stopped — Move the slider only
+        io.to(sessionId).emit(SERVER.SEEK_SONG, { position: session.position });
+    }
+
+
+}
+
 export const handlePing = (socket, data) => {
     const t1 = Date.now();
 
