@@ -20,6 +20,8 @@ class Session {
     //Add command seq for command sequencing
     this.lastCommandSeq=0;
 
+    this.queue = [];
+
   }
 
 }

@@ -14,6 +14,7 @@ class SessionState {
   final bool isConnected;
   final bool isLoading;
 
+  final List<String> queue;
   final String? error;
 
   SessionState({
@@ -27,6 +28,7 @@ class SessionState {
     this.participants = const [],
     this.isConnected = false,
     this.isLoading = false,
+    this.queue = const [],
     this.error,
   });
 
@@ -46,6 +48,7 @@ class SessionState {
     bool? isConnected,
     bool? isLoading,
     String? error,
+    List<String>? queue,
     bool clearError = false,
   }) {
     return SessionState(
@@ -58,6 +61,7 @@ class SessionState {
       participants: participants ?? this.participants,
       isConnected: isConnected ?? this.isConnected,
       isLoading: isLoading ?? this.isLoading,
+      queue: queue ?? this.queue,
       error: clearError ? null : (error ?? this.error),
     );
   }

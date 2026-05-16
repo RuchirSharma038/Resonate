@@ -6,6 +6,8 @@ export const CLIENT = {
     PLAY: "play",
     PAUSE: "pause",
     STOP: "stop",
+    ADD_TO_QUEUE: "add_to_queue",
+    PLAY_NEXT: "play_next",
     SEEK:"seek",
     PING:"ping"
 };
@@ -21,5 +23,6 @@ export const SERVER = {
     STOP_SONG: "stop_song",
     SEEK_SONG:"seek_song",
     ERROR_MSG:"error_message",
+    QUEUE_UPDATED: "queue_updated",
     PONG:"pong"
 };

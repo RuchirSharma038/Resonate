@@ -3,10 +3,22 @@ import 'package:just_audio/just_audio.dart';
 class AudioService {
   final AudioPlayer _player = AudioPlayer();
 
+
+  void Function()? onSongComplete;
+
+  AudioService() {
+    _player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+
+        onSongComplete?.call();
+
+      }
+    });
+  }
+
   Future<void> load(String url) async {
     await _player.stop();
     await _player.setUrl(url);
-    //await _player.play();
   }
 
   Future<void> play() async {
