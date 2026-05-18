@@ -16,7 +16,7 @@ class SocketService {
 
   SocketService() {
     socket = IO.io(
-      "http://192.168.0.101:3001",
+      "http://localhost:3001",
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -51,6 +51,13 @@ class SocketService {
     socket.on(event, callback);
   }
 
+  void emitAddToQueue(String sessionId, String url) {
+    socket.emit('add_to_queue', {'sessionId': sessionId, 'url': url});
+  }
+
+  void emitPlayNext(String sessionId) {
+    socket.emit('play_next', {'sessionId': sessionId});
+  }
   void disconnect() {
     socket.disconnect();
   }

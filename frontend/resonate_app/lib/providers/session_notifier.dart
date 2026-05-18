@@ -7,6 +7,10 @@ import 'package:resonate_app/services/time_sync_service.dart';
 import '../services/socket_service.dart';
 import './session_state.dart';
 import '../controllers/socket_controller.dart';
+<<<<<<< HEAD
+=======
+import 'package:firebase_auth/firebase_auth.dart';
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
 
 class SessionNotifier extends StateNotifier<SessionState> {
   final SocketController controller;
@@ -17,6 +21,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   late final DriftCorrector _driftCorrector;
 
   SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
+<<<<<<< HEAD
     : super(SessionState.initial()) {
     _driftCorrector = DriftCorrector(
       player: audio.player,
@@ -27,12 +32,29 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   // ── Init
   
+=======
+      : super(SessionState.initial()) {
+    _init();
+  }
+
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
   void _init() {
     controller.init();
     _listenConnection();
     _listenSessionEvents();
     _listenPlaybackEvents();
     _listenErrorEvents();
+
+    audio.onSongComplete = () {
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+      final isHost = (state.hostId != null) && (state.hostId == currentUserId);
+
+      if (isHost && state.sessionId.isNotEmpty) {
+        // Tells the backend to skip to the next song!
+        controller.playNext(state.sessionId);
+      }
+    };
   }
 
   //  Listeners
@@ -72,6 +94,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(hostId: data["hostId"] as String?);
     });
 
+<<<<<<< HEAD
     // Received when a user first joins an already-live session.
     // The server sends the LIVE position (elapsed already added), so we seek
     // directly to it and start drift correction from that baseline.
@@ -82,6 +105,27 @@ class SessionNotifier extends StateNotifier<SessionState> {
       final serverPos = (data["position"] as num?)?.toInt() ?? 0;
       final serverStartAt = (data["startedAt"] as num?)?.toInt();
       final hostId = data["hostId"] as String?;
+=======
+    socket.listen("session_state", (data) async {
+      final url = data["url"];
+      final serverState = data["state"];
+      final serverPos = data["position"];
+      final serverStartAt = data["startedAt"];
+      final hostId = data["hostId"];
+      final sessionId = data["sessionId"];
+      final participants = data["participants"];
+
+      // 1. GRAB THE QUEUE FROM THE SERVER STATE
+      final queueRaw = data["queue"];
+
+      state = state.copyWith(
+        sessionId: sessionId ?? state.sessionId,
+        participants: participants != null ? List<String>.from(participants) : state.participants,
+        // Save the initial queue!
+        queue: queueRaw != null ? List<String>.from(queueRaw) : state.queue,
+        isLoading: false,
+      );
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
 
       if (url != null) {
         await audio.load(url);
@@ -141,6 +185,19 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(url: data["url"] as String);
     });
 
+<<<<<<< HEAD
+=======
+    // ==========================================
+    // 2. THE QUEUE LISTENER (Catches real-time updates)
+    // ==========================================
+    socket.listen("queue_updated", (data) {
+      if (data != null) {
+        final updatedQueue = List<String>.from(data);
+        state = state.copyWith(queue: updatedQueue);
+      }
+    });
+
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
     socket.listen("play_song", (data) async {
       _driftCorrector.stop();
 
@@ -229,7 +286,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
   }
 
+<<<<<<< HEAD
   // Public actions
+=======
+  void _listenErrorEvents() {
+    socket.listen("error_message", (data) {
+      state = state.copyWith(error: data["message"], isLoading: false);
+    });
+  }
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
 
   void createSession() {
     state = state.copyWith(isLoading: true);
@@ -243,7 +308,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   void leaveSession() {
     if (state.sessionId.isEmpty) return;
+<<<<<<< HEAD
     _driftCorrector.stop();
+=======
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
     controller.leaveSession(state.sessionId);
     state = SessionState.initial();
   }
@@ -256,8 +324,12 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(error: error);
       return;
     }
+<<<<<<< HEAD
 
     state = state.copyWith(clearError: true);
+=======
+    state = state.copyWith(error: null, clearError: true);
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
     controller.setUrl(state.sessionId, url);
   }
 
@@ -276,6 +348,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     controller.stop(state.sessionId);
   }
 
+<<<<<<< HEAD
   void seek(int positionMs) {
     if (state.sessionId.isEmpty) return;
     controller.seek(state.sessionId, positionMs);
@@ -283,6 +356,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   //  Helpers
 
+=======
+  // ==========================================
+  // 3. MANUAL QUEUE UPDATE FUNCTION
+  // ==========================================
+  void updateQueue(List<String> newQueue) {
+    state = state.copyWith(queue: newQueue);
+  }
+
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
   String? _validateAudioUrl(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return "URL cannot be empty";
@@ -299,19 +381,16 @@ class SessionNotifier extends StateNotifier<SessionState> {
     }
 
     const supported = [
-      '.mp3',
-      '.wav',
-      '.ogg',
-      '.flac',
-      '.aac',
-      '.m4a',
-      '.opus',
-      '.webm',
+      '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.opus', '.webm',
     ];
     final pathLower = uri.path.toLowerCase();
     if (!supported.any((ext) => pathLower.contains(ext))) {
       return "Supported formats: mp3, wav, ogg, flac, aac, m4a, opus, webm";
     }
+<<<<<<< HEAD
+=======
+
+>>>>>>> 252dc77c7a8635f6de51f480bea9e375e8d0dc9f
     return null;
   }
 

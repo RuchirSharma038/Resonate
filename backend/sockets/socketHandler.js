@@ -58,6 +58,21 @@ export default function socketHandler(io) {
         sessionController.stop(io, socket, data);
       });
 
+
+ // Queue Events
+      socket.on(CLIENT.ADD_TO_QUEUE, (data) => {
+        sessionController.addToQueue(io, socket, data);
+      });
+
+      socket.on(CLIENT.PLAY_NEXT, (data) => {
+        sessionController.playNext(io, socket, data);
+      });
+
+      socket.on("remove_from_queue", (data) => {
+        sessionController.removeFromQueue(io, socket, data);
+      });
+
+      // Seek Event
       socket.on(CLIENT.SEEK, (data) => {
         sessionController.seek(io, socket, data);
       });
