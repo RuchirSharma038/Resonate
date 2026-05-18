@@ -23,7 +23,6 @@ final timeSyncServiceProvider = Provider<TimeSyncService>((ref) {
   final ts = TimeSyncService(socket);
   ts.init();
 
-  
   ref.onDispose(() {
     ts.dispose();
   });

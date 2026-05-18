@@ -1,14 +1,12 @@
-//import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:resonate_app/providers/audio_service.dart';
+import 'package:resonate_app/services/drift_corrector.dart';
 import 'package:resonate_app/services/time_sync_service.dart';
-//import 'package:resonate_app/models/session_model.dart';
 import '../services/socket_service.dart';
 import './session_state.dart';
-
 import '../controllers/socket_controller.dart';
-
-//import './session_state.dart';
 
 class SessionNotifier extends StateNotifier<SessionState> {
   final SocketController controller;
@@ -16,12 +14,19 @@ class SessionNotifier extends StateNotifier<SessionState> {
   final AudioService audio;
   final TimeSyncService timeSync;
 
+  late final DriftCorrector _driftCorrector;
+
   SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
     : super(SessionState.initial()) {
+    _driftCorrector = DriftCorrector(
+      player: audio.player,
+      getServerTime: timeSync.getServerTime,
+    );
     _init();
   }
 
-  //INIT
+  // ── Init
+  
   void _init() {
     controller.init();
     _listenConnection();
@@ -30,257 +35,254 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _listenErrorEvents();
   }
 
+  //  Listeners
+
   void _listenConnection() {
-    // Connect
     socket.listen("connect", (_) {
       state = state.copyWith(isConnected: true);
     });
 
-    // Disconnect
     socket.listen("disconnect", (_) {
       state = state.copyWith(isConnected: false);
+      _driftCorrector.stop();
     });
   }
 
   void _listenSessionEvents() {
-    //Session_created
     socket.listen("session_created", (data) {
       state = state.copyWith(
-        sessionId: data["sessionId"],
-        hostId: data["hostId"],
-        participants: [data["hostId"]],
+        sessionId: data["sessionId"] as String,
         isLoading: false,
       );
     });
-
-    //User_joined
 
     socket.listen("user_joined", (data) {
-      final userId = data["userId"] as String;
-      if (!state.participants.contains(userId)) {
-        final updatedUsers = List<String>.from(state.participants)..add(userId);
-        state = state.copyWith(participants: updatedUsers);
-      }
+      final updated = List<String>.from(state.participants)
+        ..add(data["userId"] as String);
+      state = state.copyWith(participants: updated);
     });
-
-    //User_left
 
     socket.listen("user_left", (data) {
-      final updatedUsers = List<String>.from(
-        state.participants,
-      ).where((u) => u != data["userId"]).toList();
-
-      state = state.copyWith(participants: updatedUsers);
+      final updated = List<String>.from(state.participants)
+        ..removeWhere((u) => u == data["userId"]);
+      state = state.copyWith(participants: updated);
     });
 
-    //Host_changed
     socket.listen("host_changed", (data) {
-      state = state.copyWith(hostId: data["hostId"]);
+      state = state.copyWith(hostId: data["hostId"] as String?);
     });
 
-    //Session_state
+    // Received when a user first joins an already-live session.
+    // The server sends the LIVE position (elapsed already added), so we seek
+    // directly to it and start drift correction from that baseline.
     socket.listen("session_state", (data) async {
-      final url = data["url"];
-      final serverState = data["state"];
-      final serverPos = data["position"];
-      final serverStartAt = data["startedAt"];
-      final hostId = data["hostId"];
-      final sessionId = data["sessionId"]; // Might be null for older backend version
-      final participants = data["participants"];
+      final url = data["url"] as String?;
+      final serverState = data["state"] as String?;
 
-      state = state.copyWith(
-        sessionId: sessionId ?? state.sessionId,
-        participants: participants != null ? List<String>.from(participants) : state.participants,
-        isLoading: false,
-      );
+      final serverPos = (data["position"] as num?)?.toInt() ?? 0;
+      final serverStartAt = (data["startedAt"] as num?)?.toInt();
+      final hostId = data["hostId"] as String?;
 
-      //Load the url
       if (url != null) {
         await audio.load(url);
         state = state.copyWith(url: url);
       }
+
       if (serverState == "playing" && serverStartAt != null) {
-        final now = timeSync.getServerTime();
-        final elapsed = now - serverStartAt;
-        final livePosition = elapsed + serverPos;
-        await audio.seek(Duration(milliseconds: livePosition.toInt()));
+        // Server sends live position (position + elapsed). Seek there directly.
+        await audio.seek(Duration(milliseconds: serverPos));
         await audio.play();
 
+        final startedAt = DateTime.fromMillisecondsSinceEpoch(serverStartAt);
         state = state.copyWith(
           playbackState: PlaybackState.playing,
-          position: Duration(milliseconds: serverPos.toInt()),
-          startedAt: DateTime.fromMillisecondsSinceEpoch(serverStartAt),
+          position: Duration(milliseconds: serverPos),
+          startedAt: startedAt,
           hostId: hostId,
+          isLoading: false,
+        );
+
+        // Start drift correction. basePosition is the live position we seeked to;
+        // startedAt is "now" from the server's perspective (since we already
+        // compensated for elapsed, treat serverNow as the new startedAt).
+        _driftCorrector.start(
+          basePositionMs: serverPos,
+          startedAtMs: timeSync.getServerTime().toInt(),
         );
       } else if (serverState == "paused") {
-        final exactPosition = Duration(milliseconds: serverPos.toInt());
-        await audio.seek(exactPosition);
-        await audio.pause();
+        _driftCorrector.stop();
+        await audio.seek(Duration(milliseconds: serverPos));
 
         state = state.copyWith(
           playbackState: PlaybackState.paused,
-          position: exactPosition,
-          startedAt: null,
+          position: Duration(milliseconds: serverPos),
+          clearStartedAt: true,
           hostId: hostId,
+          isLoading: false,
         );
       } else {
+        _driftCorrector.stop();
         await audio.stop();
         state = state.copyWith(
           playbackState: PlaybackState.stopped,
           position: Duration.zero,
-          startedAt: null,
+          clearStartedAt: true,
           hostId: hostId,
+          isLoading: false,
         );
       }
     });
   }
 
-  //
-
   void _listenPlaybackEvents() {
-    //Song_updated
     socket.listen("song_updated", (data) async {
-      await audio.load(data["url"]);
-      state = state.copyWith(url: data["url"]);
+      _driftCorrector.stop();
+      await audio.load(data["url"] as String);
+      state = state.copyWith(url: data["url"] as String);
     });
 
-    //play_song
     socket.listen("play_song", (data) async {
+      _driftCorrector.stop();
+
       final serverStartTime = (data["startTime"] as num).toInt();
       final basePosition = (data["position"] as num).toInt();
       final now = timeSync.getServerTime();
       final timeUntilPlay = serverStartTime - now;
+
       if (timeUntilPlay > 0) {
-        await audio.seek(Duration(milliseconds: basePosition.toInt()));
+        await audio.seek(Duration(milliseconds: basePosition));
         await Future.delayed(Duration(milliseconds: timeUntilPlay.toInt()));
 
+        // Post-delay drift check — did we overshoot the window?
         final now2 = timeSync.getServerTime();
-        final drift = now2 - serverStartTime;
-
+        final drift = (now2 - serverStartTime).toInt();
         if (drift.abs() > 15) {
-          await audio.seek(
-            Duration(milliseconds: (basePosition + drift).toInt()),
-          );
+          await audio.seek(Duration(milliseconds: basePosition + drift));
         }
         await audio.play();
       } else {
-        final overrun = (-timeUntilPlay).clamp(0, 10000);
-        final correctedPosition = Duration(
-          milliseconds: (basePosition + overrun).toInt(),
-        );
-
-        await audio.seek(correctedPosition);
+        // Already past the start time — correct for the overrun.
+        final overrun = (-timeUntilPlay).clamp(0, 10000).toInt();
+        await audio.seek(Duration(milliseconds: basePosition + overrun));
         await audio.play();
       }
 
+      final startedAt = DateTime.fromMillisecondsSinceEpoch(serverStartTime);
       state = state.copyWith(
         playbackState: PlaybackState.playing,
-        startedAt: DateTime.fromMillisecondsSinceEpoch(serverStartTime),
+        startedAt: startedAt,
         position: Duration(milliseconds: basePosition),
+      );
+
+      // Begin continuous drift monitoring from this baseline.
+      _driftCorrector.start(
+        basePositionMs: basePosition,
+        startedAtMs: serverStartTime,
       );
     });
 
-    //Pause song
-
     socket.listen("pause_song", (data) async {
-      final serverPosition = (data["position"] as num).toDouble();
-      final pauseTime = data["pauseTime"];
+      _driftCorrector.stop();
+
+      final serverPosition = (data["position"] as num).toInt();
+      final pauseTime = (data["pauseTime"] as num).toDouble();
       final now = timeSync.getServerTime();
-      final drift = now - pauseTime;
+      final drift = (now - pauseTime).toInt();
 
       await audio.pause();
 
-      if (drift.abs() > 300) {
-        final exactPosition = Duration(milliseconds: serverPosition.toInt());
-        await audio.seek(exactPosition);
-
-        state = state.copyWith(
-          playbackState: PlaybackState.paused,
-          position: exactPosition,
-        );
-      } else {
-        state = state.copyWith(
-          playbackState: PlaybackState.paused,
-          position: Duration(milliseconds: serverPosition.toInt()),
-        );
+      // If this event arrived significantly late, correct to exact position.
+      if (drift.abs() > 80) {
+        await audio.seek(Duration(milliseconds: serverPosition));
       }
+
+      state = state.copyWith(
+        playbackState: PlaybackState.paused,
+        position: Duration(milliseconds: serverPosition),
+        clearStartedAt: true,
+      );
     });
 
-    //Stop Song
-
     socket.listen("stop_song", (_) async {
+      _driftCorrector.stop();
       await audio.stop();
       state = state.copyWith(
         playbackState: PlaybackState.stopped,
         position: Duration.zero,
-
         clearStartedAt: true,
+      );
+    });
+
+    socket.listen("seek_song", (data) async {
+      final position = (data["position"] as num).toInt();
+      await audio.seek(Duration(milliseconds: position));
+      state = state.copyWith(position: Duration(milliseconds: position));
+    });
+  }
+
+  void _listenErrorEvents() {
+    socket.listen("error_messsage", (data) {
+      state = state.copyWith(
+        error: data["message"] as String?,
+        isLoading: false,
       );
     });
   }
 
-  //Error
-  void _listenErrorEvents() {
-    socket.listen("error_message", (data) {
-      state = state.copyWith(error: data["message"], isLoading: false);
-    });
-  }
+  // Public actions
 
-  //Create session
   void createSession() {
     state = state.copyWith(isLoading: true);
     controller.createSession();
   }
-
-  //Join session
 
   void joinSession(String sessionId) {
     state = state.copyWith(isLoading: true);
     controller.joinSession(sessionId);
   }
 
-  //Leave session
   void leaveSession() {
     if (state.sessionId.isEmpty) return;
-
+    _driftCorrector.stop();
     controller.leaveSession(state.sessionId);
-
     state = SessionState.initial();
   }
 
-  //set Url
   void setUrl(String url) {
+    if (state.sessionId.isEmpty) return;
+
     final error = _validateAudioUrl(url);
     if (error != null) {
       state = state.copyWith(error: error);
       return;
     }
 
-    state = state.copyWith(error: null, clearError: true);
+    state = state.copyWith(clearError: true);
     controller.setUrl(state.sessionId, url);
   }
 
-  //play
   void play() {
     if (state.sessionId.isEmpty) return;
-
     controller.playSong(state.sessionId);
   }
 
-  //pause
   void pause() {
     if (state.sessionId.isEmpty) return;
-
     controller.pause(state.sessionId);
   }
 
-  //stop
   void stop() {
     if (state.sessionId.isEmpty) return;
     controller.stop(state.sessionId);
   }
 
-  //Validate the url function
+  void seek(int positionMs) {
+    if (state.sessionId.isEmpty) return;
+    controller.seek(state.sessionId, positionMs);
+  }
+
+  //  Helpers
+
   String? _validateAudioUrl(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return "URL cannot be empty";
@@ -307,12 +309,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
       '.webm',
     ];
     final pathLower = uri.path.toLowerCase();
-    final hasExtension = supported.any((ext) => pathLower.contains(ext));
-    if (!hasExtension) {
-      return "URL must point to a supported audio file (mp3, wav, ogg, flac, aac, m4a, opus, webm)";
+    if (!supported.any((ext) => pathLower.contains(ext))) {
+      return "Supported formats: mp3, wav, ogg, flac, aac, m4a, opus, webm";
     }
-
-    return null; // valid
+    return null;
   }
 
   Duration getCurrentPosition() {
@@ -320,10 +320,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
         state.startedAt == null) {
       return state.position;
     }
-    final now = DateTime.fromMillisecondsSinceEpoch(
-      timeSync.getServerTime().toInt(),
-    );
-    final diff = now.difference(state.startedAt!);
-    return state.position + diff;
+    final nowMs = timeSync.getServerTime().toInt();
+    final elapsedMs = nowMs - state.startedAt!.millisecondsSinceEpoch;
+    return state.position + Duration(milliseconds: elapsedMs);
+  }
+
+  @override
+  void dispose() {
+    _driftCorrector.dispose();
+    super.dispose();
   }
 }

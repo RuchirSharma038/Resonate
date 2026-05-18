@@ -3,19 +3,6 @@ import 'dart:math';
 
 import 'package:resonate_app/services/socket_service.dart';
 
-/// NTP-style clock synchronisation.
-///
-/// Keeps a smoothed estimate of the offset between client wall-clock and
-/// server wall-clock. Callers use [getServerTime()] wherever they need to
-/// reason about a shared timeline.
-///
-/// FIXES vs. previous version
-/// ───────────────────────────
-/// • [init] is now idempotent — calling it twice no longer stacks duplicate
-///   'pong' listeners (which previously doubled all offset samples).
-/// • Added [dispose] so the provider can cleanly cancel the timer.
-/// • Adaptive ping interval based on current offset variance.
-/// • Dynamic RTT outlier rejection (P75-based) instead of hard 300 ms cap.
 class TimeSyncService {
   final SocketService socket;
   TimeSyncService(this.socket);
@@ -33,10 +20,8 @@ class TimeSyncService {
   Timer? periodicTimer;
   bool _initCalled = false; // guards against double-init
 
-  // ── Public API ────────────────────────────────────────────────────────────
-
   void init() {
-    if (_initCalled) return; // idempotent
+    if (_initCalled) return;
     _initCalled = true;
 
     socket.listen('pong', _onPong);
@@ -47,7 +32,7 @@ class TimeSyncService {
   double getServerTime() =>
       DateTime.now().millisecondsSinceEpoch + smoothedOffset;
 
-  /// 0 = no data / high variance. 1 = very stable.
+  // 0 = no data / high variance. 1 = very stable.
   double get syncQuality {
     if (!initialized || _offsetBuffer.length < 2) return 0;
     final v = _variance(_offsetBuffer);
@@ -58,8 +43,6 @@ class TimeSyncService {
     periodicTimer?.cancel();
     _pendingPings.clear();
   }
-
-  // ── Internal ──────────────────────────────────────────────────────────────
 
   void _onPong(dynamic data) {
     final id = data['id'];
@@ -95,7 +78,8 @@ class TimeSyncService {
   bool _isRttAcceptable(double rtt) {
     if (_rttBuffer.isEmpty) return rtt < 500;
     final sorted = List<double>.from(_rttBuffer)..sort();
-    final p75 = sorted[(sorted.length * 0.75).floor().clamp(0, sorted.length - 1)];
+    final p75 =
+        sorted[(sorted.length * 0.75).floor().clamp(0, sorted.length - 1)];
     return rtt <= max(50.0, p75 * 1.5);
   }
 
@@ -120,8 +104,15 @@ class TimeSyncService {
   void _scheduleAdaptivePing() {
     periodicTimer?.cancel();
     final v = _variance(_offsetBuffer);
-    final seconds = v < 5 ? 30 : v < 20 ? 10 : 2;
-    periodicTimer = Timer.periodic(Duration(seconds: seconds), (_) => _sendPing());
+    final seconds = v < 5
+        ? 30
+        : v < 20
+        ? 10
+        : 2;
+    periodicTimer = Timer.periodic(
+      Duration(seconds: seconds),
+      (_) => _sendPing(),
+    );
   }
 
   double _median(List<double> vals) {
@@ -134,6 +125,7 @@ class TimeSyncService {
   double _variance(List<double> vals) {
     if (vals.length < 2) return 0;
     final mean = vals.reduce((a, b) => a + b) / vals.length;
-    return vals.map((v) => pow(v - mean, 2) as double).reduce((a, b) => a + b) / vals.length;
+    return vals.map((v) => pow(v - mean, 2) as double).reduce((a, b) => a + b) /
+        vals.length;
   }
 }
