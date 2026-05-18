@@ -15,7 +15,7 @@ class AudioPlay extends ConsumerStatefulWidget {
 
 class _AudioPlayState extends ConsumerState<AudioPlay> {
   final TextEditingController urlController = TextEditingController();
-   String? _localUrlError;
+  String? _localUrlError;
 
   @override
   void dispose() {
@@ -27,21 +27,27 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
 
   Color _statusColor(PlaybackState state) {
     switch (state) {
-      case PlaybackState.playing: return Colors.green;
-      case PlaybackState.paused: return Colors.orange;
-      case PlaybackState.stopped: return Colors.red;
+      case PlaybackState.playing:
+        return Colors.green;
+      case PlaybackState.paused:
+        return Colors.orange;
+      case PlaybackState.stopped:
+        return Colors.red;
     }
   }
 
   String _statusLabel(PlaybackState state) {
     switch (state) {
-      case PlaybackState.playing: return "Playing";
-      case PlaybackState.paused: return "Paused";
-      case PlaybackState.stopped: return "Stopped";
+      case PlaybackState.playing:
+        return "Playing";
+      case PlaybackState.paused:
+        return "Paused";
+      case PlaybackState.stopped:
+        return "Stopped";
     }
   }
 
-void _handleHostAction(bool isHost, VoidCallback action) {
+  void _handleHostAction(bool isHost, VoidCallback action) {
     if (isHost) {
       action();
     } else {
@@ -84,8 +90,12 @@ void _handleHostAction(bool isHost, VoidCallback action) {
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 6,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 14,
+                    ),
                     activeTrackColor: Colors.deepPurpleAccent,
                     inactiveTrackColor: Colors.white24,
                     thumbColor: Colors.deepPurpleAccent,
@@ -93,7 +103,9 @@ void _handleHostAction(bool isHost, VoidCallback action) {
                   child: Slider(
                     min: 0.0,
                     max: durValue > 0 ? durValue : 1.0,
-                    value: posValue <= (durValue > 0 ? durValue : 1.0) ? posValue : 0.0,
+                    value: posValue <= (durValue > 0 ? durValue : 1.0)
+                        ? posValue
+                        : 0.0,
                     onChanged: (val) {
                       if (!isHost || !hasSession) {
                         _handleHostAction(isHost, () {});
@@ -111,8 +123,20 @@ void _handleHostAction(bool isHost, VoidCallback action) {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(_formatDuration(position), style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                      Text(_formatDuration(duration), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text(
+                        _formatDuration(position),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        _formatDuration(duration),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -165,9 +189,10 @@ void _handleHostAction(bool isHost, VoidCallback action) {
       children: [
         Text(label, style: const TextStyle(color: Colors.white70)),
         Flexible(
-          child: Text(value,
-              style: valueStyle ?? const TextStyle(color: Colors.white),
-              overflow: TextOverflow.ellipsis
+          child: Text(
+            value,
+            style: valueStyle ?? const TextStyle(color: Colors.white),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -179,7 +204,8 @@ void _handleHostAction(bool isHost, VoidCallback action) {
     final session = ref.watch(sessionProvider);
     final myUserId = ref.watch(myUserIdProvider);
     final hasSession = session.sessionId.isNotEmpty;
-    final isHost = hasSession && myUserId.isNotEmpty && session.hostId == myUserId;
+    final isHost =
+        hasSession && myUserId.isNotEmpty && session.hostId == myUserId;
 
     return Scaffold(
       appBar: AppBar(
@@ -200,25 +226,51 @@ void _handleHostAction(bool isHost, VoidCallback action) {
             // SESSION INFO CARD (RESTORED ALL FEATURES)
             Card(
               color: Colors.white10,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _infoRow("Session ID", session.sessionId.isEmpty ? "Not joined" : session.sessionId),
+                    _infoRow(
+                      "Session ID",
+                      session.sessionId.isEmpty
+                          ? "Not joined"
+                          : session.sessionId,
+                    ),
                     const SizedBox(height: 8),
-                    _infoRow("Role", isHost ? "Host" : "Listener",
-                        valueStyle: TextStyle(color: isHost ? Colors.greenAccent : Colors.white70, fontWeight: FontWeight.bold)),
+                    _infoRow(
+                      "Role",
+                      isHost ? "Host" : "Listener",
+                      valueStyle: TextStyle(
+                        color: isHost ? Colors.greenAccent : Colors.white70,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("State", style: TextStyle(color: Colors.white70)),
+                        const Text(
+                          "State",
+                          style: TextStyle(color: Colors.white70),
+                        ),
                         Row(
                           children: [
-                            Container(width: 10, height: 10, decoration: BoxDecoration(color: _statusColor(session.playbackState), shape: BoxShape.circle)),
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: _statusColor(session.playbackState),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
                             const SizedBox(width: 6),
-                            Text(_statusLabel(session.playbackState), style: const TextStyle(color: Colors.white)),
+                            Text(
+                              _statusLabel(session.playbackState),
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ],
                         ),
                       ],
@@ -231,22 +283,51 @@ void _handleHostAction(bool isHost, VoidCallback action) {
             ),
             const SizedBox(height: 20),
 
-           // URL INPUT
+            // URL INPUT
             TextField(
               controller: urlController,
+              onChanged: _onUrlChanged,
               decoration: InputDecoration(
                 hintText: 'Paste audio URL here...',
                 filled: true,
                 fillColor: Colors.white10,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                errorText: _localUrlError,
               ),
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).setUrl(urlController.text.trim())) : null, child: const Text("Load Track"))),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => _loadTrack(context),
+                          )
+                        : null,
+                    child: const Text("Load Track"),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: OutlinedButton(onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(ctrl.socketControllerProvider).addToQueue(session.sessionId, urlController.text.trim())) : null, child: const Text("Add to Queue"))),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref
+                                .read(ctrl.socketControllerProvider)
+                                .addToQueue(
+                                  session.sessionId,
+                                  urlController.text.trim(),
+                                ),
+                          )
+                        : null,
+                    child: const Text("Add to Queue"),
+                  ),
+                ),
               ],
             ),
 
@@ -269,30 +350,63 @@ void _handleHostAction(bool isHost, VoidCallback action) {
                   IconButton(
                     iconSize: 36,
                     tooltip: "Play",
-                    icon: Icon(Icons.play_arrow, color: (hasSession && isHost) ? Colors.white : Colors.white24),
-                    onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).play()) : null,
+                    icon: Icon(
+                      Icons.play_arrow,
+                      color: (hasSession && isHost)
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref.read(sessionProvider.notifier).play(),
+                          )
+                        : null,
                   ),
                   IconButton(
                     iconSize: 36,
                     tooltip: "Pause",
-                    icon: Icon(Icons.pause, color: (hasSession && isHost) ? Colors.white : Colors.white24),
-                    onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).pause()) : null,
+                    icon: Icon(
+                      Icons.pause,
+                      color: (hasSession && isHost)
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref.read(sessionProvider.notifier).pause(),
+                          )
+                        : null,
                   ),
                   IconButton(
                     iconSize: 36,
                     tooltip: "Stop",
-                    icon: Icon(Icons.stop, color: (hasSession && isHost) ? Colors.white : Colors.white24),
-                    onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).stop()) : null,
+                    icon: Icon(
+                      Icons.stop,
+                      color: (hasSession && isHost)
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref.read(sessionProvider.notifier).stop(),
+                          )
+                        : null,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // QUEUE LIST (From other_branch)
+            // QUEUE LIST
             if (session.queue.isNotEmpty) ...[
               const Divider(color: Colors.white24, height: 40),
-              const Text("Next in Queue", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                "Next in Queue",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               ListView.builder(
                 shrinkWrap: true,
@@ -301,26 +415,51 @@ void _handleHostAction(bool isHost, VoidCallback action) {
                 itemBuilder: (context, index) {
                   final queueUrl = session.queue[index];
                   return ListTile(
-                    title: Text(queueUrl, style: const TextStyle(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: isHost ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.play_circle_fill, color: Colors.greenAccent),
-                          onPressed: () => _handleHostAction(isHost, () {
-                            ref.read(sessionProvider.notifier).setUrl(queueUrl);
-                            ref.read(sessionProvider.notifier).play();
-                            ref.read(ctrl.socketControllerProvider).removeFromQueue(session.sessionId, queueUrl);
-                          }),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.redAccent),
-                          onPressed: () => _handleHostAction(isHost, () {
-                            ref.read(ctrl.socketControllerProvider).removeFromQueue(session.sessionId, queueUrl);
-                          }),
-                        ),
-                      ],
-                    ) : null,
+                    title: Text(
+                      queueUrl,
+                      style: const TextStyle(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: isHost
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.play_circle_fill,
+                                  color: Colors.greenAccent,
+                                ),
+                                onPressed: () => _handleHostAction(isHost, () {
+                                  ref
+                                      .read(sessionProvider.notifier)
+                                      .setUrl(queueUrl);
+                                  ref.read(sessionProvider.notifier).play();
+                                  ref
+                                      .read(ctrl.socketControllerProvider)
+                                      .removeFromQueue(
+                                        session.sessionId,
+                                        queueUrl,
+                                      );
+                                }),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () => _handleHostAction(isHost, () {
+                                  ref
+                                      .read(ctrl.socketControllerProvider)
+                                      .removeFromQueue(
+                                        session.sessionId,
+                                        queueUrl,
+                                      );
+                                }),
+                              ),
+                            ],
+                          )
+                        : null,
                   );
                 },
               ),
