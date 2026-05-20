@@ -1,13 +1,10 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+//import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "../services/socket_service.dart";
 
-// 1. THIS IS THE MISSING PROVIDER (Defined outside the class)
-final socketControllerProvider = Provider<SocketController>((ref) {
-  // We get the SocketService from another provider if you have one,
-  // or instantiate it directly as your project was doing.
-  final service = SocketService();
-  return SocketController(service);
-});
+// final socketControllerProvider = Provider<SocketController>((ref) {
+//   final service = SocketService();
+//   return SocketController(service);
+// });
 
 class SocketController {
   final SocketService socketService;
@@ -19,7 +16,6 @@ class SocketController {
 
   Future<void> init() async {
     socketService.connect();
-    // (The queue listener that used 'ref' was safely moved to your SessionNotifier!)
   }
 
   void createSession() {
@@ -55,10 +51,7 @@ class SocketController {
   }
 
   void addToQueue(String sessionId, String url) {
-    socketService.emit("add_to_queue", {
-      "sessionId": sessionId,
-      "url": url,
-    });
+    socketService.emit("add_to_queue", {"sessionId": sessionId, "url": url});
   }
 
   void playNext(String sessionId) {
@@ -68,7 +61,6 @@ class SocketController {
     });
   }
 
-  // Updated logic to ensure the server removes the item from the list
   void removeFromQueue(String sessionId, String url) {
     socketService.emit('remove_from_queue', {
       'sessionId': sessionId,
@@ -77,6 +69,10 @@ class SocketController {
   }
 
   void seek(String sessionId, int position) {
-    socketService.emit("seek", {"sessionId": sessionId, "position": position, "seq": _nextSeq()});
+    socketService.emit("seek", {
+      "sessionId": sessionId,
+      "position": position,
+      "seq": _nextSeq(),
+    });
   }
 }

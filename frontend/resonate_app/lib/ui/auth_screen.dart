@@ -31,7 +31,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     //  Validate form fields
     if (!_formKey.currentState!.validate()) return;
 
-    //  Unfocus keyboard for smooth UI
+    //  Unfocus keyboard
     FocusScope.of(context).unfocus();
 
     // Start loading spinner
@@ -47,7 +47,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             );
 
         // Simulating network delay for UI testing
-        await Future.delayed(const Duration(seconds: 2));
+        //await Future.delayed(const Duration(seconds: 2));
       } else {
         await ref
             .read(authControllerProvider)
@@ -57,13 +57,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               _nameController.text.trim(),
             );
 
-        await Future.delayed(const Duration(seconds: 2));
+        //await Future.delayed(const Duration(seconds: 2));
       }
-
-      // If successful,  Riverpod AuthStateProvider will automatically
-      // trigger a route change, so I don't need Navigator.push() here!
     } catch (e) {
-      //Error Handling via Snackbar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

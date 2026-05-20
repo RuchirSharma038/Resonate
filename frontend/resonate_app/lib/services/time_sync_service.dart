@@ -10,6 +10,8 @@ class TimeSyncService {
   double smoothedOffset = 0;
   bool initialized = false;
 
+  bool _initialSyncComplete = false;
+
   final List<double> _offsetBuffer = [];
   final List<double> _rttBuffer = [];
   final int bufferSize = 8;
@@ -57,7 +59,9 @@ class TimeSyncService {
     final offset = ((t1 - t0) + (t2 - t3)) / 2;
 
     _updateSync(rtt, offset);
-    _scheduleAdaptivePing();
+    if (_initialSyncComplete) {
+      _scheduleAdaptivePing();
+    }
   }
 
   void _startInitialSync() async {
@@ -65,6 +69,8 @@ class TimeSyncService {
       await Future.delayed(Duration(milliseconds: 50 + i * 20));
       _sendPing();
     }
+    _initialSyncComplete = true;
+    _scheduleAdaptivePing();
   }
 
   void _sendPing() {

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonate_app/providers/session_provider.dart';
 import 'package:resonate_app/providers/session_state.dart';
 import 'package:resonate_app/providers/auth_provider.dart';
-import 'package:resonate_app/controllers/socket_controller.dart' as ctrl;
+import 'package:resonate_app/providers/session_provider.dart' as session_prov;
 import 'package:resonate_app/providers/audioservice_provider.dart';
 
 class AudioPlay extends ConsumerStatefulWidget {
@@ -16,6 +16,7 @@ class AudioPlay extends ConsumerStatefulWidget {
 class _AudioPlayState extends ConsumerState<AudioPlay> {
   final TextEditingController urlController = TextEditingController();
   String? _localUrlError;
+  double? _dragValue;
 
   @override
   void dispose() {
@@ -81,9 +82,16 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
             final position = posSnap.data ?? Duration.zero;
             final duration = durSnap.data ?? Duration.zero;
 
-            double posValue = position.inMilliseconds.toDouble();
-            double durValue = duration.inMilliseconds.toDouble();
-            if (posValue > durValue && durValue > 0) posValue = durValue;
+            final double maxDur = duration.inMilliseconds > 0
+                ? duration.inMilliseconds.toDouble()
+                : 1.0;
+            final double sliderValue =
+                (_dragValue ?? position.inMilliseconds.toDouble()).clamp(
+                  0.0,
+                  maxDur,
+                );
+            //double maxDur = durValue > 0 ? durValue : 1.0;
+            //if (posValue > durValue && durValue > 0) posValue = durValue;
 
             return Column(
               children: [
@@ -102,19 +110,17 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                   ),
                   child: Slider(
                     min: 0.0,
-                    max: durValue > 0 ? durValue : 1.0,
-                    value: posValue <= (durValue > 0 ? durValue : 1.0)
-                        ? posValue
-                        : 0.0,
-                    onChanged: (val) {
-                      if (!isHost || !hasSession) {
-                        _handleHostAction(isHost, () {});
-                        return;
-                      }
-                    },
+                    max: maxDur,
+                    value: sliderValue,
+                    onChanged: (isHost && hasSession)
+                        ? (val) => setState(() => _dragValue = val)
+                        : null,
                     onChangeEnd: (val) {
                       if (!isHost || !hasSession) return;
                       ref.read(sessionProvider.notifier).seek(val.toInt());
+                      setState(() {
+                        _dragValue = null;
+                      });
                     },
                   ),
                 ),
@@ -318,7 +324,7 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                         ? () => _handleHostAction(
                             isHost,
                             () => ref
-                                .read(ctrl.socketControllerProvider)
+                                .read(session_prov.socketControllerProvider)
                                 .addToQueue(
                                   session.sessionId,
                                   urlController.text.trim(),
@@ -333,11 +339,11 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
 
             const SizedBox(height: 20),
 
-            // SEEK BAR (From main)
+            // SEEK BAR
             _buildSeekBar(isHost, hasSession),
             const SizedBox(height: 10),
 
-            // PLAYBACK CONTROLS (From main)
+            // PLAYBACK CONTROLS
             Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
@@ -433,10 +439,12 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                                 onPressed: () => _handleHostAction(isHost, () {
                                   ref
                                       .read(sessionProvider.notifier)
-                                      .setUrl(queueUrl);
-                                  ref.read(sessionProvider.notifier).play();
+                                      .setUrlAndPlay(queueUrl);
+                                  // ref.read(sessionProvider.notifier).play();
                                   ref
-                                      .read(ctrl.socketControllerProvider)
+                                      .read(
+                                        session_prov.socketControllerProvider,
+                                      )
                                       .removeFromQueue(
                                         session.sessionId,
                                         queueUrl,
@@ -450,7 +458,9 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                                 ),
                                 onPressed: () => _handleHostAction(isHost, () {
                                   ref
-                                      .read(ctrl.socketControllerProvider)
+                                      .read(
+                                        session_prov.socketControllerProvider,
+                                      )
                                       .removeFromQueue(
                                         session.sessionId,
                                         queueUrl,

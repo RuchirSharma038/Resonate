@@ -3,22 +3,32 @@ import 'package:just_audio/just_audio.dart';
 class AudioService {
   final AudioPlayer _player = AudioPlayer();
 
-
   void Function()? onSongComplete;
+  void Function(String error)? onLoadError;
 
   AudioService() {
     _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
-
         onSongComplete?.call();
-
       }
     });
   }
 
-  Future<void> load(String url) async {
-    await _player.stop();
-    await _player.setUrl(url);
+  Future<bool> load(String url) async {
+    try {
+      await _player.stop();
+      await _player.setUrl(url);
+      return true;
+    } on PlayerException catch (e) {
+      onLoadError?.call("Could not load audio: ${e.message}");
+      return false;
+    } on PlayerInterruptedException {
+      // Interrupted by another load
+      return false;
+    } catch (e) {
+      onLoadError?.call("Unexpected error loading audio");
+      return false;
+    }
   }
 
   Future<void> play() async {
