@@ -9,7 +9,8 @@ export const CLIENT = {
     ADD_TO_QUEUE: "add_to_queue",
     PLAY_NEXT: "play_next",
     SEEK:"seek",
-    PING:"ping"
+    PING:"ping",
+    REMOVE_FROM_QUEUE: "remove_from_queue",
 };
 export const SERVER = {
     SESSION_CREATED: "session_created",

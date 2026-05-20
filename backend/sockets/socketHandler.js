@@ -68,7 +68,7 @@ export default function socketHandler(io) {
         sessionController.playNext(io, socket, data);
       });
 
-      socket.on("remove_from_queue", (data) => {
+      socket.on(CLIENT.REMOVE_FROM_QUEUE, (data) => {
         sessionController.removeFromQueue(io, socket, data);
       });
 

@@ -1,12 +1,6 @@
-// Functions TODO
-// 1. create, join, leave
-// 2. setUrl, play, pause, stop
-// 3. handleDisconnect
-// 4. ping
-
 import { SERVER } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
-import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser,addToQueueService, playNextTrack } from "../services/sessionManager.js";
+import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser, addToQueueService, playNextTrack } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
 import timeUtils from "../utils/timeUtils.js";
 import idGenerator from "../utils/idGenerator.js";
@@ -18,17 +12,25 @@ function isStaleCommand(session, seq) {
     session.lastCommandSeq = seq;
     return false;
 }
-//1. Create Session
+
+// 1. Create Session
 export const createSession = (socket) => {
-    // const { sessionId } = data;
+
     const sessionId = idGenerator.generateSessionId();
     let session = get(sessionId);
+
+    // If the session with that id already exists
     if (session) {
         socket.emit("error", { message: "Session already exists" });
         return;
     }
+
+
+    //Create the session with sessionId and host user id = userId
     create(sessionId, socket.userId);
-    socket.join(sessionId); //Join the room with sessionId provided
+
+    // Host Join the room with sessionId provided
+    socket.join(sessionId);
 
     //Now add the host into that session Map
     addClient(sessionId, socket.userId);
@@ -72,7 +74,7 @@ export const joinSession = (io, socket, data) => {
         state: session.state,
         position: session.position,
         startedAt: session.startedAt,
-        hostId:session.hostUserId,
+        hostId: session.hostUserId,
         participants: Array.from(session.clients.keys()),
 
         queue: session.queue || []
@@ -125,11 +127,11 @@ function handleHostLeave(io, session, leavingUserId) {
 }
 
 export const handleDisconnect = (io, socket) => {
-    const sessions = getAllSessionsOfUser(socket.userId);
-    sessions.forEach(session => {
-        leaveSession(io, socket, { sessionId: session.sessionId });
+    const sessions = getAllSessionsOfUser(socket.userId).map(s => s.sessionId);
+    sessionIds.forEach(sessionId => {
+        leaveSession(io, socket, { sessionId });
     });
-    clientRegistry.removeClient(socket);
+    //clientRegistry.removeClient(socket);
 
 }
 
@@ -198,13 +200,11 @@ export const pause = (io, socket, data) => {
 
     const now = Date.now();
 
-    let elapsed = 0;
-    if (session.startedAt) {
-        elapsed = Math.max(0, now - session.startedAt);
-    }
+    const elapsed = session.startedAt
+        ? Math.max(0, now - session.startedAt)
+        : 0;
 
-    session.position += elapsed;
-
+    session.position = session.position + elapsed; 
     session.state = "paused";
     session.startedAt = null;
 
@@ -287,6 +287,7 @@ export const addToQueue = (io, socket, data) => {
 
     // Ensure session exists and URL is valid
     if (!validators.requireSession(socket, session)) return;
+    if (!validators.requireHost(socket, session)) return;
     if (!validators.requireValidUrl(socket, url)) return;
 
     const updatedQueue = addToQueueService(sessionId, url);
@@ -309,15 +310,18 @@ export const playNext = (io, socket, data) => {
     if (nextData) {
         // Compute the precise synchronized start time for the new track
         const startTime = timeUtils.computeStartTime();
-        session.startedAt = startTime;
 
-        // 1. Tell everyone what the new song URL is
+        session.state = "playing";
+        session.startedAt = startTime;
+        session.position = 0;
+
+        //  Tell everyone what the new song URL is
         io.to(sessionId).emit(SERVER.SONG_UPDATED, { url: nextData.trackUrl });
 
-        // 2. Send the updated (shorter) queue
+        //  Send the updated (shorter) queue
         io.to(sessionId).emit(SERVER.QUEUE_UPDATED, nextData.queue);
 
-        // 3. Immediately command all devices to start playing from position 0
+        //  Immediately command all devices to start playing from position 0
         io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime, position: 0 });
     }
 };
