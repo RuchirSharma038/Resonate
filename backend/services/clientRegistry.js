@@ -12,12 +12,20 @@ function registerClient(socket) {
 }
 
 function removeClient(socket) {
-    userToSocket.delete(socket.userId);
+    const userId = socketToUser.get(socket.id);
+    if (userId) {
+        const sockets = userToSockets.get(userId);
+        if (sockets) {
+            sockets.delete(socket.id);
+            if (sockets.size === 0) userToSockets.delete(userId);
+        }
+    }
     socketToUser.delete(socket.id);
 }
 
 function getSocketId(userId) {
-    return userToSocket.get(userId);
+    const sockets = userToSockets.get(userId);
+    return sockets ? [...sockets][0] : undefined;
 }
 
 export default {
