@@ -67,7 +67,12 @@ class SocketController {
       "seq": _nextSeq(),
     });
   }
-
+  void selectTrack(String sessionId, Map<String, dynamic> trackJson) {
+    socketService.emit("track_selected", {
+      "sessionId": sessionId,
+      "track": trackJson,
+    });
+  }
   // Updated logic to ensure the server removes the item from the list
   void removeFromQueue(String sessionId, String url) {
     socketService.emit('remove_from_queue', {

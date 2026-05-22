@@ -70,7 +70,9 @@ export default function socketHandler(io) {
       socket.on("remove_from_queue", (data) => {
         sessionController.removeFromQueue(io, socket, data);
       });
-
+socket.on("track_selected", (data) => {
+  sessionController.selectTrack(io, socket, data);
+});
       /*
         DISCONNECT HANDLING
       */

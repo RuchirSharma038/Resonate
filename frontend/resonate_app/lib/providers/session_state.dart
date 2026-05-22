@@ -1,3 +1,4 @@
+import 'package:resonate_app/services/music_service.dart';
 enum PlaybackState { playing, paused, stopped }
 
 class SessionState {
@@ -16,7 +17,7 @@ class SessionState {
 
   final List<String> queue;
   final String? error;
-
+  final MusicTrack? currentTrack;
   SessionState({
     required this.sessionId,
     this.hostId,
@@ -30,6 +31,7 @@ class SessionState {
     this.isLoading = false,
     this.queue = const [],
     this.error,
+    this.currentTrack,
   });
 
   factory SessionState.initial() {
@@ -49,6 +51,8 @@ class SessionState {
     bool? isLoading,
     String? error,
     List<String>? queue,
+    MusicTrack? currentTrack,
+    bool clearCurrentTrack = false,
     bool clearError = false,
   }) {
     return SessionState(
@@ -62,6 +66,7 @@ class SessionState {
       isConnected: isConnected ?? this.isConnected,
       isLoading: isLoading ?? this.isLoading,
       queue: queue ?? this.queue,
+      currentTrack: clearCurrentTrack ? null : (currentTrack ?? this.currentTrack),
       error: clearError ? null : (error ?? this.error),
     );
   }

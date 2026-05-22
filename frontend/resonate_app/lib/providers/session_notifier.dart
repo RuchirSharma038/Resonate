@@ -6,7 +6,7 @@ import '../services/socket_service.dart';
 import './session_state.dart';
 import '../controllers/socket_controller.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:resonate_app/services/music_service.dart';
 class SessionNotifier extends StateNotifier<SessionState> {
   final SocketController controller;
   final SocketService socket;
@@ -143,9 +143,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(url: data["url"]);
     });
 
-    // ==========================================
+    socket.listen("track_selected", (data) async {
+      final track = MusicTrack.fromJson(Map<String, dynamic>.from(data["track"]));
+      await audio.load(track.audioUrl);
+      state = state.copyWith(url: track.audioUrl, currentTrack: track);
+    });
+
+
     // 2. THE QUEUE LISTENER (Catches real-time updates)
-    // ==========================================
+
     socket.listen("queue_updated", (data) {
       if (data != null) {
         final updatedQueue = List<String>.from(data);
@@ -251,7 +257,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(error: error);
       return;
     }
-    state = state.copyWith(error: null, clearError: true);
+    state = state.copyWith(error: null,
+        clearCurrentTrack: true,
+        clearError: true);
     controller.setUrl(state.sessionId, url);
   }
 
@@ -277,6 +285,16 @@ class SessionNotifier extends StateNotifier<SessionState> {
     state = state.copyWith(queue: newQueue);
   }
 
+  void selectTrack(MusicTrack track) {
+    if (state.sessionId.isEmpty) return;
+
+
+    audio.load(track.audioUrl);
+    state = state.copyWith(url: track.audioUrl, currentTrack: track);
+
+
+    controller.selectTrack(state.sessionId, track.toJson());
+  }
   String? _validateAudioUrl(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return "URL cannot be empty";

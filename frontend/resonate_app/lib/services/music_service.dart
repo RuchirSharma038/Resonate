@@ -2,40 +2,24 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class MusicService {
-  // Replace with your actual Pixabay API key from https://pixabay.com/api/
-  static const String pixabayApiKey = 'YOUR_PIXABAY_API_KEY_HERE';
-  static const String pixabayBaseUrl = 'https://pixabay.com/api/audio/';
 
-  /// Search music on Pixabay
-  /// Returns a list of MusicTrack objects
-  static Future<List<MusicTrack>> searchPixabayMusic(String query) async {
+  static const String backendUrl = 'http://10.58.8.243:3001/api/music/search';
+
+  static Future<List<MusicTrack>> searchMusic(String query) async {
     try {
-      if (query.trim().isEmpty) {
-        throw Exception('Search query cannot be empty');
-      }
+      if (query.trim().isEmpty) throw Exception('Search query cannot be empty');
 
-      final url = Uri.parse(
-        '$pixabayBaseUrl?key=$pixabayApiKey&q=${Uri.encodeComponent(query)}&per_page=20',
-      );
-
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Request timed out'),
-      );
+      final url = Uri.parse('$backendUrl?q=${Uri.encodeComponent(query)}');
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
-        final List<dynamic> hits = jsonData['hits'] ?? [];
 
-        if (hits.isEmpty) {
-          throw Exception('No songs found for "$query"');
-        }
 
-        return hits
-            .map((track) => MusicTrack.fromPixabay(track))
-            .toList();
-      } else if (response.statusCode == 400) {
-        throw Exception('Invalid API key or search parameters');
+        final List<dynamic> results = jsonData['results'] ?? [];
+        if (results.isEmpty) throw Exception('No songs found for "$query"');
+
+        return results.map((track) => MusicTrack.fromApi(track)).toList();
       } else {
         throw Exception('Failed to search music: ${response.statusCode}');
       }
@@ -45,14 +29,13 @@ class MusicService {
   }
 }
 
-/// Model class for music tracks
 class MusicTrack {
   final String id;
   final String title;
   final String artist;
   final String audioUrl;
   final String? imageUrl;
-  final String source; // 'pixabay'
+  final String source;
   final Duration? duration;
 
   MusicTrack({
@@ -65,23 +48,33 @@ class MusicTrack {
     this.duration,
   });
 
-  /// Parse Pixabay API response
-  factory MusicTrack.fromPixabay(Map<String, dynamic> json) {
+
+  factory MusicTrack.fromApi(Map<String, dynamic> json) {
     return MusicTrack(
-      id: json['id'].toString(),
-      title: json['tags'] ?? 'Unknown Title',
-      artist: json['user'] ?? 'Unknown Artist',
-      // Pixabay provides preview URL - use the full audio if available
-      audioUrl: json['preview'] ?? json['audio'] ?? '',
-      imageUrl: json['image'],
-      source: 'pixabay',
-      duration: Duration(
-        seconds: json['duration'] ?? 0,
-      ),
+      id: json['trackId'].toString(),
+      title: json['trackName'] ?? 'Unknown',
+      artist: json['artistName'] ?? 'Unknown',
+      audioUrl: json['previewUrl'] ?? '',
+      imageUrl: json['artworkUrl100'],
+      source: 'itunes',
+      duration: Duration(milliseconds: json['trackTimeMillis'] ?? 0),
     );
   }
 
-  /// Convert to JSON for sending to backend via Socket.IO
+  // Used when sending track over Socket.IO to other users
+  factory MusicTrack.fromJson(Map<String, dynamic> json) {
+    return MusicTrack(
+      id: json['id'].toString(),
+      title: json['title'] ?? 'Unknown',
+      artist: json['artist'] ?? 'Unknown',
+      audioUrl: json['audioUrl'] ?? '',
+      imageUrl: json['imageUrl'],
+      source: json['source'] ?? 'api',
+      duration: Duration(seconds: json['duration'] ?? 0),
+    );
+  }
+
+  // Used when receiving track over Socket.IO
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -93,7 +86,4 @@ class MusicTrack {
       'duration': duration?.inSeconds ?? 0,
     };
   }
-
-  @override
-  String toString() => 'MusicTrack(id: $id, title: $title, artist: $artist)';
 }
