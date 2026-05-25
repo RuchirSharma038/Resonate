@@ -26,11 +26,8 @@ function rateLimited(socket, limiter, fn) {
 }
 
 export default function socketHandler(io) {
-
   io.on("connection", (socket) => {
-
     try {
-
       logger.info(`User connected: ${socket.userId}`);
 
       //Register User
@@ -40,9 +37,11 @@ export default function socketHandler(io) {
         SESSION EVENTS
       */
 
-      socket.on(CLIENT.CREATE_SESSION, rateLimited(socket, sessionLimiter, () => {
-        sessionController.createSession(socket);
-      })
+      socket.on(
+        CLIENT.CREATE_SESSION,
+        rateLimited(socket, sessionLimiter, () => {
+          sessionController.createSession(socket);
+        })
       );
 
       socket.on(
@@ -68,7 +67,6 @@ export default function socketHandler(io) {
           sessionController.handlePing(socket, data);
         })
       );
-
 
       /*
         PLAYBACK EVENTS (HOST ONLY)
@@ -108,6 +106,13 @@ export default function socketHandler(io) {
           sessionController.seek(io, socket, data);
         })
       );
+      
+      socket.on(
+        "track_selected",
+        rateLimited(socket, playbackLimiter, (data) => {
+          sessionController.selectTrack(io, socket, data);
+        })
+      );
 
       // Queue Events
       socket.on(
@@ -131,13 +136,11 @@ export default function socketHandler(io) {
         })
       );
 
-
       /*
         DISCONNECT HANDLING
       */
 
       socket.on("disconnect", (reason) => {
-
         logger.info(`User disconnected: ${socket.userId} (${reason})`);
 
         // handle leaving all sessions
@@ -148,7 +151,6 @@ export default function socketHandler(io) {
 
         // free per user tocken buckets
         cleanupLimiters(socket.userId);
-
       });
 
       /*
@@ -158,17 +160,12 @@ export default function socketHandler(io) {
       socket.on("error", (err) => {
         logger.error(`Socket error for ${socket.userId}`, err);
       });
-
     } catch (err) {
-
       logger.error("Socket connection error", err);
 
       socket.emit("error_message", {
-        message: "Internal server error"
+        message: "Internal server error",
       });
-
     }
-
   });
-
 }

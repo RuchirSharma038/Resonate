@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonate_app/providers/session_provider.dart';
 import 'package:resonate_app/providers/session_state.dart';
 import 'package:resonate_app/providers/auth_provider.dart';
+import 'package:resonate_app/services/music_service.dart';
+import 'package:resonate_app/ui/music_search_screen.dart';
 import 'package:resonate_app/providers/session_provider.dart' as session_prov;
 import 'package:resonate_app/providers/audioservice_provider.dart';
 
@@ -24,7 +26,7 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
     super.dispose();
   }
 
-  // --- HELPERS (RESTORED) ---
+  //    HELPERS 
 
   Color _statusColor(PlaybackState state) {
     switch (state) {
@@ -90,8 +92,6 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                   0.0,
                   maxDur,
                 );
-            //double maxDur = durValue > 0 ? durValue : 1.0;
-            //if (posValue > durValue && durValue > 0) posValue = durValue;
 
             return Column(
               children: [
@@ -229,7 +229,7 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // SESSION INFO CARD (RESTORED ALL FEATURES)
+            // SESSION INFO CARD
             Card(
               color: Colors.white10,
               shape: RoundedRectangleBorder(
@@ -336,8 +336,98 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                 ),
               ],
             ),
-
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.search),
+                label: const Text("Search Music"),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurpleAccent),
+                onPressed: hasSession
+                    ? () => _handleHostAction(isHost, () async {
+                  final MusicTrack? track = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const MusicSearchScreen()),
+                  );
+                  if (track != null) {
+                    // Show options dialog
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        backgroundColor: const Color(0xFF2D2D44),
+                        title: Text(track.title,
+                            style: const TextStyle(color: Colors.white)),
+                        content: Text(track.artist,
+                            style: const TextStyle(color: Colors.white54)),
+                        actions: [
+                          TextButton(
+                            child: const Text("Play Now",
+                                style: TextStyle(color: Colors.greenAccent)),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              ref.read(sessionProvider.notifier).selectTrack(track);
+                            },
+                          ),
+                          TextButton(
+                            child: const Text("Add to Queue",
+                                style: TextStyle(color: Colors.deepPurpleAccent)),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              ref.read(session_prov.socketControllerProvider)
+                                  .addToQueue(session.sessionId, track.audioUrl);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                })
+                    : null,
+              ),
+            ),
             const SizedBox(height: 20),
+            if (session.currentTrack != null) ...[
+              const SizedBox(height: 16),
+              Card(
+                color: Colors.white10,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: ListTile(
+                  leading: session.currentTrack!.imageUrl != null
+                      ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      session.currentTrack!.imageUrl!,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                      : const Icon(Icons.music_note, color: Colors.white54, size: 40),
+                  title: Text(
+                    session.currentTrack!.title,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    session.currentTrack!.artist,
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.queue_music, color: Colors.deepPurpleAccent),
+                    onPressed: hasSession ? () => _handleHostAction(isHost, () {
+                      ref.read(session_prov.socketControllerProvider)
+                          .addToQueue(session.sessionId, session.currentTrack!.audioUrl);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Added to queue")),
+                      );
+                    }) : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // SEEK BAR
             _buildSeekBar(isHost, hasSession),
@@ -440,7 +530,6 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                                   ref
                                       .read(sessionProvider.notifier)
                                       .setUrlAndPlay(queueUrl);
-                                  // ref.read(sessionProvider.notifier).play();
                                   ref
                                       .read(
                                         session_prov.socketControllerProvider,

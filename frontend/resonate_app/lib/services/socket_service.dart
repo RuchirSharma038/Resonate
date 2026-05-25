@@ -18,7 +18,7 @@ class SocketService {
 
   SocketService() {
     socket = IO.io(
-      "http://localhost:3001",
+      "http://10.58.8.243:3001",
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()

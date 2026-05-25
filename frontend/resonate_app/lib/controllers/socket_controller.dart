@@ -1,4 +1,3 @@
-//import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "../services/socket_service.dart";
 
 // final socketControllerProvider = Provider<SocketController>((ref) {
@@ -58,6 +57,13 @@ class SocketController {
     socketService.emit("play_next", {
       "sessionId": sessionId,
       "seq": _nextSeq(),
+    });
+  }
+
+  void selectTrack(String sessionId, Map<String, dynamic> trackJson) {
+    socketService.emit("track_selected", {
+      "sessionId": sessionId,
+      "track": trackJson,
     });
   }
 

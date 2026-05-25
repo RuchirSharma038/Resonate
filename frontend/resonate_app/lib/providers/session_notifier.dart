@@ -7,6 +7,7 @@ import '../services/socket_service.dart';
 import './session_state.dart';
 import '../controllers/socket_controller.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:resonate_app/services/music_service.dart';
 
 class SessionNotifier extends StateNotifier<SessionState> {
   final SocketController controller;
@@ -17,7 +18,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   late final DriftCorrector _driftCorrector;
 
   SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
-    : super(SessionState.initial()) {
+      : super(SessionState.initial()) {
     _driftCorrector = DriftCorrector(
       player: audio.player,
       getServerTime: timeSync.getServerTime,
@@ -160,8 +161,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
       _driftCorrector.stop();
       final newUrl = data["url"] as String;
       state = state.copyWith(url: newUrl);
-      //state = state.copyWith(url: data["url"] as String);
-      // await audio.load(data["url"] as String);
       await audio.load(newUrl);
       if (_autoPlayAfterLoad) {
         _autoPlayAfterLoad = false;
@@ -169,8 +168,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
       }
     });
 
-    // THE QUEUE LISTENER
+    socket.listen("track_selected", (data) async {
+      final track = MusicTrack.fromJson(Map<String, dynamic>.from(data["track"]));
+      await audio.load(track.audioUrl);
+      state = state.copyWith(url: track.audioUrl, currentTrack: track);
+    });
 
+    // THE QUEUE LISTENER
     socket.listen("queue_updated", (data) {
       if (data != null) {
         final updatedQueue = List<String>.from(data);
@@ -293,7 +297,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
       return;
     }
 
-    state = state.copyWith(clearError: true);
+    state = state.copyWith(
+      error: null,
+      clearCurrentTrack: true,
+      clearError: true,
+    );
     controller.setUrl(state.sessionId, url);
   }
 
@@ -318,9 +326,17 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   //  MANUAL QUEUE UPDATE FUNCTION
-
   void updateQueue(List<String> newQueue) {
     state = state.copyWith(queue: newQueue);
+  }
+
+  void selectTrack(MusicTrack track) async {
+    if (state.sessionId.isEmpty) return;
+
+    await audio.load(track.audioUrl);
+    state = state.copyWith(url: track.audioUrl, currentTrack: track);
+
+    controller.selectTrack(state.sessionId, track.toJson());
   }
 
   void setUrlAndPlay(String url) {
