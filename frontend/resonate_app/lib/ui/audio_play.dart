@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonate_app/providers/session_provider.dart';
 import 'package:resonate_app/providers/session_state.dart';
 import 'package:resonate_app/providers/auth_provider.dart';
-import 'package:resonate_app/controllers/socket_controller.dart' as ctrl;
 import 'package:resonate_app/services/music_service.dart';
 import 'package:resonate_app/ui/music_search_screen.dart';
+import 'package:resonate_app/providers/session_provider.dart' as session_prov;
+import 'package:resonate_app/providers/audioservice_provider.dart';
+
 class AudioPlay extends ConsumerStatefulWidget {
   const AudioPlay({super.key});
 
@@ -15,6 +17,8 @@ class AudioPlay extends ConsumerStatefulWidget {
 
 class _AudioPlayState extends ConsumerState<AudioPlay> {
   final TextEditingController urlController = TextEditingController();
+  String? _localUrlError;
+  double? _dragValue;
 
   @override
   void dispose() {
@@ -22,21 +26,27 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
     super.dispose();
   }
 
-  // --- HELPERS (RESTORED) ---
+  //    HELPERS 
 
   Color _statusColor(PlaybackState state) {
     switch (state) {
-      case PlaybackState.playing: return Colors.green;
-      case PlaybackState.paused: return Colors.orange;
-      case PlaybackState.stopped: return Colors.red;
+      case PlaybackState.playing:
+        return Colors.green;
+      case PlaybackState.paused:
+        return Colors.orange;
+      case PlaybackState.stopped:
+        return Colors.red;
     }
   }
 
   String _statusLabel(PlaybackState state) {
     switch (state) {
-      case PlaybackState.playing: return "Playing";
-      case PlaybackState.paused: return "Paused";
-      case PlaybackState.stopped: return "Stopped";
+      case PlaybackState.playing:
+        return "Playing";
+      case PlaybackState.paused:
+        return "Paused";
+      case PlaybackState.stopped:
+        return "Stopped";
     }
   }
 
@@ -53,15 +63,142 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
     }
   }
 
+  String _formatDuration(Duration d) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    final twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
+    final twoDigitSeconds = twoDigits(d.inSeconds.remainder(60));
+    if (d.inHours > 0) {
+      return "${d.inHours}:$twoDigitMinutes:$twoDigitSeconds";
+    }
+    return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  Widget _buildSeekBar(bool isHost, bool hasSession) {
+    final player = ref.read(audioServiceProvider).player;
+    return StreamBuilder<Duration?>(
+      stream: player.positionStream,
+      builder: (context, posSnap) {
+        return StreamBuilder<Duration?>(
+          stream: player.durationStream,
+          builder: (context, durSnap) {
+            final position = posSnap.data ?? Duration.zero;
+            final duration = durSnap.data ?? Duration.zero;
+
+            final double maxDur = duration.inMilliseconds > 0
+                ? duration.inMilliseconds.toDouble()
+                : 1.0;
+            final double sliderValue =
+                (_dragValue ?? position.inMilliseconds.toDouble()).clamp(
+                  0.0,
+                  maxDur,
+                );
+
+            return Column(
+              children: [
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 6,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 14,
+                    ),
+                    activeTrackColor: Colors.deepPurpleAccent,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.deepPurpleAccent,
+                  ),
+                  child: Slider(
+                    min: 0.0,
+                    max: maxDur,
+                    value: sliderValue,
+                    onChanged: (isHost && hasSession)
+                        ? (val) => setState(() => _dragValue = val)
+                        : null,
+                    onChangeEnd: (val) {
+                      if (!isHost || !hasSession) return;
+                      ref.read(sessionProvider.notifier).seek(val.toInt());
+                      setState(() {
+                        _dragValue = null;
+                      });
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(position),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        _formatDuration(duration),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _onUrlChanged(String value) {
+    final trimmed = value.trim();
+    setState(() {
+      if (trimmed.isEmpty) {
+        _localUrlError = null;
+        return;
+      }
+      final uri = Uri.tryParse(trimmed);
+      if (uri == null || !uri.isAbsolute) {
+        _localUrlError = "Enter a valid absolute URL";
+        return;
+      }
+      if (uri.scheme != 'http' && uri.scheme != 'https') {
+        _localUrlError = "Must start with http:// or https://";
+        return;
+      }
+      _localUrlError = null;
+    });
+  }
+
+  void _loadTrack(BuildContext context) {
+    final url = urlController.text.trim();
+    if (url.isEmpty) return;
+    if (_localUrlError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_localUrlError!),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+    ref.read(sessionProvider.notifier).setUrl(url);
+  }
+
   Widget _infoRow(String label, String value, {TextStyle? valueStyle}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: Colors.white70)),
         Flexible(
-          child: Text(value,
-              style: valueStyle ?? const TextStyle(color: Colors.white),
-              overflow: TextOverflow.ellipsis
+          child: Text(
+            value,
+            style: valueStyle ?? const TextStyle(color: Colors.white),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -73,7 +210,8 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
     final session = ref.watch(sessionProvider);
     final myUserId = ref.watch(myUserIdProvider);
     final hasSession = session.sessionId.isNotEmpty;
-    final isHost = hasSession && myUserId.isNotEmpty && session.hostId == myUserId;
+    final isHost =
+        hasSession && myUserId.isNotEmpty && session.hostId == myUserId;
 
     return Scaffold(
       appBar: AppBar(
@@ -91,28 +229,54 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // SESSION INFO CARD (RESTORED ALL FEATURES)
+            // SESSION INFO CARD
             Card(
               color: Colors.white10,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _infoRow("Session ID", session.sessionId.isEmpty ? "Not joined" : session.sessionId),
+                    _infoRow(
+                      "Session ID",
+                      session.sessionId.isEmpty
+                          ? "Not joined"
+                          : session.sessionId,
+                    ),
                     const SizedBox(height: 8),
-                    _infoRow("Role", isHost ? "Host" : "Listener",
-                        valueStyle: TextStyle(color: isHost ? Colors.greenAccent : Colors.white70, fontWeight: FontWeight.bold)),
+                    _infoRow(
+                      "Role",
+                      isHost ? "Host" : "Listener",
+                      valueStyle: TextStyle(
+                        color: isHost ? Colors.greenAccent : Colors.white70,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("State", style: TextStyle(color: Colors.white70)),
+                        const Text(
+                          "State",
+                          style: TextStyle(color: Colors.white70),
+                        ),
                         Row(
                           children: [
-                            Container(width: 10, height: 10, decoration: BoxDecoration(color: _statusColor(session.playbackState), shape: BoxShape.circle)),
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: _statusColor(session.playbackState),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
                             const SizedBox(width: 6),
-                            Text(_statusLabel(session.playbackState), style: const TextStyle(color: Colors.white)),
+                            Text(
+                              _statusLabel(session.playbackState),
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ],
                         ),
                       ],
@@ -128,19 +292,48 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
             // URL INPUT
             TextField(
               controller: urlController,
+              onChanged: _onUrlChanged,
               decoration: InputDecoration(
                 hintText: 'Paste audio URL here...',
                 filled: true,
                 fillColor: Colors.white10,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                errorText: _localUrlError,
               ),
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).setUrl(urlController.text.trim())) : null, child: const Text("Load Track"))),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => _loadTrack(context),
+                          )
+                        : null,
+                    child: const Text("Load Track"),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: OutlinedButton(onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(ctrl.socketControllerProvider).addToQueue(session.sessionId, urlController.text.trim())) : null, child: const Text("Add to Queue"))),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref
+                                .read(session_prov.socketControllerProvider)
+                                .addToQueue(
+                                  session.sessionId,
+                                  urlController.text.trim(),
+                                ),
+                          )
+                        : null,
+                    child: const Text("Add to Queue"),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -182,7 +375,7 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                                 style: TextStyle(color: Colors.deepPurpleAccent)),
                             onPressed: () {
                               Navigator.pop(context);
-                              ref.read(ctrl.socketControllerProvider)
+                              ref.read(session_prov.socketControllerProvider)
                                   .addToQueue(session.sessionId, track.audioUrl);
                             },
                           ),
@@ -221,35 +414,95 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                     session.currentTrack!.artist,
                     style: const TextStyle(color: Colors.white54),
                   ),
-    trailing: IconButton(
-    icon: const Icon(Icons.queue_music, color: Colors.deepPurpleAccent),
-    onPressed: hasSession ? () => _handleHostAction(isHost, () {
-    ref.read(ctrl.socketControllerProvider)
-        .addToQueue(session.sessionId, session.currentTrack!.audioUrl);
-    ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Added to queue")),
-    );
-    }) : null,
-    ),
-    ),
-    ),
-    const SizedBox(height: 8),
-    ],
+                  trailing: IconButton(
+                    icon: const Icon(Icons.queue_music, color: Colors.deepPurpleAccent),
+                    onPressed: hasSession ? () => _handleHostAction(isHost, () {
+                      ref.read(session_prov.socketControllerProvider)
+                          .addToQueue(session.sessionId, session.currentTrack!.audioUrl);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Added to queue")),
+                      );
+                    }) : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
 
-            // MAIN CONTROLS
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(icon: const Icon(Icons.play_arrow, color: Colors.greenAccent, size: 40), onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).play()) : null),
-                IconButton(icon: const Icon(Icons.pause, color: Colors.orangeAccent, size: 40), onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).pause()) : null),
-                IconButton(icon: const Icon(Icons.stop, color: Colors.redAccent, size: 40), onPressed: hasSession ? () => _handleHostAction(isHost, () => ref.read(sessionProvider.notifier).stop()) : null),
-              ],
+            // SEEK BAR
+            _buildSeekBar(isHost, hasSession),
+            const SizedBox(height: 10),
+
+            // PLAYBACK CONTROLS
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    iconSize: 36,
+                    tooltip: "Play",
+                    icon: Icon(
+                      Icons.play_arrow,
+                      color: (hasSession && isHost)
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref.read(sessionProvider.notifier).play(),
+                          )
+                        : null,
+                  ),
+                  IconButton(
+                    iconSize: 36,
+                    tooltip: "Pause",
+                    icon: Icon(
+                      Icons.pause,
+                      color: (hasSession && isHost)
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref.read(sessionProvider.notifier).pause(),
+                          )
+                        : null,
+                  ),
+                  IconButton(
+                    iconSize: 36,
+                    tooltip: "Stop",
+                    icon: Icon(
+                      Icons.stop,
+                      color: (hasSession && isHost)
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(
+                            isHost,
+                            () => ref.read(sessionProvider.notifier).stop(),
+                          )
+                        : null,
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(height: 20),
 
             // QUEUE LIST
             if (session.queue.isNotEmpty) ...[
               const Divider(color: Colors.white24, height: 40),
-              const Text("Next in Queue", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                "Next in Queue",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               ListView.builder(
                 shrinkWrap: true,
@@ -258,32 +511,58 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                 itemBuilder: (context, index) {
                   final queueUrl = session.queue[index];
                   return ListTile(
-                    title: Text(queueUrl, style: const TextStyle(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: isHost ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.play_circle_fill, color: Colors.greenAccent),
-                          onPressed: () => _handleHostAction(isHost, () {
-                            // FIXED: Set URL and Play immediately
-                            ref.read(sessionProvider.notifier).setUrl(queueUrl);
-                            ref.read(sessionProvider.notifier).play();
-                            ref.read(ctrl.socketControllerProvider).removeFromQueue(session.sessionId, queueUrl);
-                          }),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.redAccent),
-                          onPressed: () => _handleHostAction(isHost, () {
-                            // FIXED: Immediate delete call to socket controller
-                            ref.read(ctrl.socketControllerProvider).removeFromQueue(session.sessionId, queueUrl);
-                          }),
-                        ),
-                      ],
-                    ) : null,
+                    title: Text(
+                      queueUrl,
+                      style: const TextStyle(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: isHost
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.play_circle_fill,
+                                  color: Colors.greenAccent,
+                                ),
+                                onPressed: () => _handleHostAction(isHost, () {
+                                  ref
+                                      .read(sessionProvider.notifier)
+                                      .setUrlAndPlay(queueUrl);
+                                  ref
+                                      .read(
+                                        session_prov.socketControllerProvider,
+                                      )
+                                      .removeFromQueue(
+                                        session.sessionId,
+                                        queueUrl,
+                                      );
+                                }),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () => _handleHostAction(isHost, () {
+                                  ref
+                                      .read(
+                                        session_prov.socketControllerProvider,
+                                      )
+                                      .removeFromQueue(
+                                        session.sessionId,
+                                        queueUrl,
+                                      );
+                                }),
+                              ),
+                            ],
+                          )
+                        : null,
                   );
                 },
               ),
-            ]
+            ],
           ],
         ),
       ),

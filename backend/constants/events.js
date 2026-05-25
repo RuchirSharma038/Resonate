@@ -8,7 +8,9 @@ export const CLIENT = {
     STOP: "stop",
     ADD_TO_QUEUE: "add_to_queue",
     PLAY_NEXT: "play_next",
-    PING:"ping"
+    SEEK:"seek",
+    PING:"ping",
+    REMOVE_FROM_QUEUE: "remove_from_queue",
 };
 export const SERVER = {
     SESSION_CREATED: "session_created",
@@ -20,6 +22,7 @@ export const SERVER = {
     PLAY_SONG: "play_song",
     PAUSE_SONG: "pause_song",
     STOP_SONG: "stop_song",
+    SEEK_SONG:"seek_song",
     ERROR_MSG:"error_message",
     QUEUE_UPDATED: "queue_updated",
     PONG:"pong"

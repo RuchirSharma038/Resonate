@@ -1,15 +1,10 @@
-// Functions TODO
-// 1. create, join, leave
-// 2. setUrl, play, pause, stop
-// 3. handleDisconnect
-// 4. ping
-
 import { SERVER } from "../constants/events.js";
 import clientRegistry from "../services/clientRegistry.js";
-import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser,addToQueueService, playNextTrack } from "../services/sessionManager.js";
+import { create, get, addClient, removeClient, removeSession, getAllSessionsOfUser, addToQueueService, playNextTrack } from "../services/sessionManager.js";
 import validators from "../utils/validation.js";
 import timeUtils from "../utils/timeUtils.js";
 import idGenerator from "../utils/idGenerator.js";
+import { MAX_PARTICIPANTS, MAX_QUEUE_LENGTH } from "../constants/limits.js";
 
 function isStaleCommand(session, seq) {
 
@@ -18,17 +13,25 @@ function isStaleCommand(session, seq) {
     session.lastCommandSeq = seq;
     return false;
 }
-//1. Create Session
+
+// 1. Create Session
 export const createSession = (socket) => {
-    // const { sessionId } = data;
+
     const sessionId = idGenerator.generateSessionId();
     let session = get(sessionId);
+
+    // If the session with that id already exists
     if (session) {
         socket.emit("error", { message: "Session already exists" });
         return;
     }
+
+
+    //Create the session with sessionId and host user id = userId
     create(sessionId, socket.userId);
-    socket.join(sessionId); //Join the room with sessionId provided
+
+    // Host Join the room with sessionId provided
+    socket.join(sessionId);
 
     //Now add the host into that session Map
     addClient(sessionId, socket.userId);
@@ -49,7 +52,16 @@ export const joinSession = (io, socket, data) => {
     const session = get(sessionId);
 
     // First check if the session with sessionId exists or not
-    validators.requireSession(socket, session);
+    if (!validators.requireSession(socket, session)) return;
+
+    //Enforce the participants cap
+    if (session.clients.size >= MAX_PARTICIPANTS) {
+        socket.emit(SERVER.ERROR_MSG, {
+            message: `Session is full (maximum ${MAX_PARTICIPANTS} participants).`,
+        });
+        return;
+    }
+
 
     // Join user in that room
     socket.join(sessionId);
@@ -72,7 +84,7 @@ export const joinSession = (io, socket, data) => {
         state: session.state,
         position: session.position,
         startedAt: session.startedAt,
-        hostId:session.hostUserId,
+        hostId: session.hostUserId,
         participants: Array.from(session.clients.keys()),
 
         queue: session.queue || []
@@ -125,11 +137,13 @@ function handleHostLeave(io, session, leavingUserId) {
 }
 
 export const handleDisconnect = (io, socket) => {
-    const sessions = getAllSessionsOfUser(socket.userId);
-    sessions.forEach(session => {
-        leaveSession(io, socket, { sessionId: session.sessionId });
+    const sessionIds = getAllSessionsOfUser(socket.userId).map(
+        (s) => s.sessionId
+    );
+    sessionIds.forEach((sessionId) => {
+        leaveSession(io, socket, { sessionId });
     });
-    clientRegistry.removeClient(socket);
+    //clientRegistry.removeClient(socket);
 
 }
 
@@ -198,13 +212,11 @@ export const pause = (io, socket, data) => {
 
     const now = Date.now();
 
-    let elapsed = 0;
-    if (session.startedAt) {
-        elapsed = Math.max(0, now - session.startedAt);
-    }
+    const elapsed = session.startedAt
+        ? Math.max(0, now - session.startedAt)
+        : 0;
 
-    session.position += elapsed;
-
+    session.position = session.position + elapsed;
     session.state = "paused";
     session.startedAt = null;
 
@@ -233,6 +245,37 @@ export const stop = (io, socket, data) => {
     io.to(sessionId).emit(SERVER.STOP_SONG);
 }
 
+export const seek = (io, socket, data) => {
+    const { sessionId, position, seq } = data;
+    const session = get(sessionId);
+    if (!validators.requireSession(socket, session)) {
+        return;
+    }
+    if (!validators.requireHost(socket, session)) {
+        return;
+    }
+    if (isStaleCommand(session, seq)) return;
+    if (typeof position !== "number" || position < 0) {
+        socket.emit(SERVER.ERROR_MSG, { message: "Invalid seek position" });
+        return;
+    }
+    session.position = position;
+    if (session.state === "playing") {
+
+        const startTime = timeUtils.computeStartTime();
+        session.startedAt = startTime;
+        io.to(sessionId).emit(SERVER.PLAY_SONG, {
+            startTime,
+            position: session.position
+        });
+    } else {
+
+        io.to(sessionId).emit(SERVER.SEEK_SONG, { position: session.position });
+    }
+
+
+}
+
 export const handlePing = (socket, data) => {
     const t1 = Date.now();
 
@@ -254,13 +297,21 @@ export const addToQueue = (io, socket, data) => {
     const { sessionId, url } = data;
     const session = get(sessionId);
 
-    // Ensure session exists and URL is valid
+
     if (!validators.requireSession(socket, session)) return;
+    if (!validators.requireHost(socket, session)) return;
     if (!validators.requireValidUrl(socket, url)) return;
+
+    if ((session.queue?.length ?? 0) >= MAX_QUEUE_LENGTH) {
+        socket.emit(SERVER.ERROR_MSG, {
+            message: `Queue is full (maximum ${MAX_QUEUE_LENGTH} tracks). Remove a track before adding more.`,
+        });
+        return;
+    }
 
     const updatedQueue = addToQueueService(sessionId, url);
     if (updatedQueue) {
-        // Broadcast the new queue to everyone
+
         io.to(sessionId).emit(SERVER.QUEUE_UPDATED, updatedQueue);
     }
 };
@@ -276,17 +327,20 @@ export const playNext = (io, socket, data) => {
     const nextData = playNextTrack(sessionId);
 
     if (nextData) {
-        // Compute the precise synchronized start time for the new track
-        const startTime = timeUtils.computeStartTime();
-        session.startedAt = startTime;
 
-        // 1. Tell everyone what the new song URL is
+        const startTime = timeUtils.computeStartTime();
+
+        session.state = "playing";
+        session.startedAt = startTime;
+        session.position = 0;
+
+
         io.to(sessionId).emit(SERVER.SONG_UPDATED, { url: nextData.trackUrl });
 
-        // 2. Send the updated (shorter) queue
+
         io.to(sessionId).emit(SERVER.QUEUE_UPDATED, nextData.queue);
 
-        // 3. Immediately command all devices to start playing from position 0
+
         io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime, position: 0 });
     }
 };
@@ -294,16 +348,14 @@ export const removeFromQueue = (io, socket, data) => {
     const { sessionId, url } = data;
     const session = get(sessionId);
 
-    // 1. Ensure the session exists
+
     if (!validators.requireSession(socket, session)) return;
     if (!session.queue || session.queue.length === 0) return;
 
-    // 2. Filter the deleted URL out of the queue array
-    // (This keeps all songs that do NOT match the deleted URL)
+
     session.queue = session.queue.filter(trackUrl => trackUrl !== url);
 
-    // 3. Broadcast the fresh, updated list back to every phone in the room
-    // Note: Make sure SERVER.QUEUE_UPDATED is used (or just "queue_updated" if you hardcoded it)
+
     io.to(sessionId).emit(SERVER.QUEUE_UPDATED, session.queue);
 };
 export const selectTrack = (io, socket, data) => {

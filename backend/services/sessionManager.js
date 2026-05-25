@@ -2,37 +2,37 @@ import Session from "../models/session.js";
 
 const sessions = new Map();
 
-export const create=(sessionId,hostUserId)=>{
-    const session = new Session(sessionId,hostUserId);
-    sessions.set(sessionId,session);
+export const create = (sessionId, hostUserId) => {
+    const session = new Session(sessionId, hostUserId);
+    sessions.set(sessionId, session);
     return session;
 }
 
-export const get=(sessionId)=>{
-    
+export const get = (sessionId) => {
+
     return sessions.get(sessionId);
 }
 
-export const addClient=(sessionId,userId)=>{
+export const addClient = (sessionId, userId) => {
     const session = sessions.get(sessionId);
-    if(!session) return;
+    if (!session) return;
 
-    session.clients.set(userId,true);
+    session.clients.set(userId, true);
 }
-export const removeClient=(sessionId,userId)=>{
+export const removeClient = (sessionId, userId) => {
     const session = sessions.get(sessionId);
-    if(!session)return;
+    if (!session) return;
     session.clients.delete(userId);
 }
 
-export const removeSession=(sessionId)=>{
+export const removeSession = (sessionId) => {
     sessions.delete(sessionId);
 }
 
-export const getAllSessionsOfUser=(userId)=>{
-    const result =[];
-    for(const [sessionId,session] of sessions.entries()){
-        if(session.clients.has(userId)){
+export const getAllSessionsOfUser = (userId) => {
+    const result = [];
+    for (const [sessionId, session] of sessions.entries()) {
+        if (session.clients.has(userId)) {
             result.push(session);
         }
     }
@@ -58,9 +58,9 @@ export const playNextTrack = (sessionId) => {
     const nextUrl = session.queue.shift();
     session.trackUrl = nextUrl;
     session.position = 0;
-    session.state = "playing";
+    // session.state = "playing";
 
-    return { trackUrl: nextUrl, queue: session.queue };
+    return { trackUrl: nextUrl, queue: [...session.queue] };
 }
 
 
