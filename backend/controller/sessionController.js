@@ -359,22 +359,23 @@ export const removeFromQueue = (io, socket, data) => {
     io.to(sessionId).emit(SERVER.QUEUE_UPDATED, session.queue);
 };
 export const selectTrack = (io, socket, data) => {
-  const { sessionId, track } = data;
-  const session = get(sessionId);
+    const { sessionId, track } = data;
+    const session = get(sessionId);
 
-  if (!validators.requireSession(socket, session)) return;
-  if (!track || !track.audioUrl) {
-    socket.emit("error_message", { message: "Invalid track data" });
-    return;
-  }
+    if (!validators.requireSession(socket, session)) return;
+    if (!validators.requireHost(socket, session)) return;
+    if (!track || !track.audioUrl) {
+        socket.emit("error_message", { message: "Invalid track data" });
+        return;
+    }
 
-  session.trackUrl = track.audioUrl;
-  session.currentTrack = track;
-  session.state = "stopped";
-  session.position = 0;
-  session.startedAt = null;
+    session.trackUrl = track.audioUrl;
+    session.currentTrack = track;
+    session.state = "stopped";
+    session.position = 0;
+    session.startedAt = null;
 
-  io.to(sessionId).emit("track_selected", { track });
+    socket.broadcast.to(sessionId).emit(SERVER.SELECT_TRACK, { track });
 };
 
 

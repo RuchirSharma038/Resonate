@@ -26,7 +26,7 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
     super.dispose();
   }
 
-  //    HELPERS 
+  //    HELPERS
 
   Color _statusColor(PlaybackState state) {
     switch (state) {
@@ -321,15 +321,26 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: hasSession
-                        ? () => _handleHostAction(
-                            isHost,
-                            () => ref
-                                .read(session_prov.socketControllerProvider)
-                                .addToQueue(
-                                  session.sessionId,
-                                  urlController.text.trim(),
+                        ? () => _handleHostAction(isHost, () {
+                            final url = urlController.text.trim();
+                            if (url.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Enter a URL first"),
                                 ),
-                          )
+                              );
+                              return;
+                            }
+                            if (_localUrlError != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(_localUrlError!)),
+                              );
+                              return;
+                            }
+                            ref
+                                .read(session_prov.socketControllerProvider)
+                                .addToQueue(session.sessionId, url);
+                          })
                         : null,
                     child: const Text("Add to Queue"),
                   ),
@@ -343,47 +354,67 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                 icon: const Icon(Icons.search),
                 label: const Text("Search Music"),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurpleAccent),
+                  backgroundColor: Colors.deepPurpleAccent,
+                ),
                 onPressed: hasSession
                     ? () => _handleHostAction(isHost, () async {
-                  final MusicTrack? track = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const MusicSearchScreen()),
-                  );
-                  if (track != null) {
-                    // Show options dialog
-                    showDialog(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        backgroundColor: const Color(0xFF2D2D44),
-                        title: Text(track.title,
-                            style: const TextStyle(color: Colors.white)),
-                        content: Text(track.artist,
-                            style: const TextStyle(color: Colors.white54)),
-                        actions: [
-                          TextButton(
-                            child: const Text("Play Now",
-                                style: TextStyle(color: Colors.greenAccent)),
-                            onPressed: () {
-                              Navigator.pop(context);
-                              ref.read(sessionProvider.notifier).selectTrack(track);
-                            },
+                        final MusicTrack? track = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MusicSearchScreen(),
                           ),
-                          TextButton(
-                            child: const Text("Add to Queue",
-                                style: TextStyle(color: Colors.deepPurpleAccent)),
-                            onPressed: () {
-                              Navigator.pop(context);
-                              ref.read(session_prov.socketControllerProvider)
-                                  .addToQueue(session.sessionId, track.audioUrl);
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                })
+                        );
+                        if (track != null) {
+                          // Show options dialog
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              backgroundColor: const Color(0xFF2D2D44),
+                              title: Text(
+                                track.title,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              content: Text(
+                                track.artist,
+                                style: const TextStyle(color: Colors.white54),
+                              ),
+                              actions: [
+                                TextButton(
+                                  child: const Text(
+                                    "Play Now",
+                                    style: TextStyle(color: Colors.greenAccent),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    ref
+                                        .read(sessionProvider.notifier)
+                                        .selectTrack(track);
+                                  },
+                                ),
+                                TextButton(
+                                  child: const Text(
+                                    "Add to Queue",
+                                    style: TextStyle(
+                                      color: Colors.deepPurpleAccent,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    ref
+                                        .read(
+                                          session_prov.socketControllerProvider,
+                                        )
+                                        .addToQueue(
+                                          session.sessionId,
+                                          track.audioUrl,
+                                        );
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      })
                     : null,
               ),
             ),
@@ -392,22 +423,31 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
               const SizedBox(height: 16),
               Card(
                 color: Colors.white10,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: ListTile(
                   leading: session.currentTrack!.imageUrl != null
                       ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      session.currentTrack!.imageUrl!,
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                      : const Icon(Icons.music_note, color: Colors.white54, size: 40),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            session.currentTrack!.imageUrl!,
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
+                          size: 40,
+                        ),
                   title: Text(
                     session.currentTrack!.title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
@@ -415,14 +455,23 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                     style: const TextStyle(color: Colors.white54),
                   ),
                   trailing: IconButton(
-                    icon: const Icon(Icons.queue_music, color: Colors.deepPurpleAccent),
-                    onPressed: hasSession ? () => _handleHostAction(isHost, () {
-                      ref.read(session_prov.socketControllerProvider)
-                          .addToQueue(session.sessionId, session.currentTrack!.audioUrl);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Added to queue")),
-                      );
-                    }) : null,
+                    icon: const Icon(
+                      Icons.queue_music,
+                      color: Colors.deepPurpleAccent,
+                    ),
+                    onPressed: hasSession
+                        ? () => _handleHostAction(isHost, () {
+                            ref
+                                .read(session_prov.socketControllerProvider)
+                                .addToQueue(
+                                  session.sessionId,
+                                  session.currentTrack!.audioUrl,
+                                );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Added to queue")),
+                            );
+                          })
+                        : null,
                   ),
                 ),
               ),

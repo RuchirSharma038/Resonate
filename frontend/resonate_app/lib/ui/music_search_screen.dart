@@ -15,14 +15,24 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
   String? _error;
 
   Future<void> _search() async {
-    setState(() { _isLoading = true; _error = null; _results = []; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _results = [];
+    });
     try {
       final results = await MusicService.searchMusic(_searchController.text);
-      setState(() { _results = results; });
+      setState(() {
+        _results = results.where((t) => t.audioUrl.isNotEmpty).toList();
+      });
     } catch (e) {
-      setState(() { _error = e.toString(); });
+      setState(() {
+        _error = e.toString();
+      });
     } finally {
-      setState(() { _isLoading = false; });
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -83,8 +93,10 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: Text(_error!,
-                    style: const TextStyle(color: Colors.redAccent)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
               ),
 
             // Results list
@@ -96,24 +108,28 @@ class _MusicSearchScreenState extends State<MusicSearchScreen> {
                   return ListTile(
                     leading: track.imageUrl != null
                         ? ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.network(
-                        track.imageUrl!,
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                      ),
-                    )
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.network(
+                              track.imageUrl!,
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                            ),
+                          )
                         : const Icon(Icons.music_note, color: Colors.white54),
-                    title: Text(track.title,
-                        style: const TextStyle(color: Colors.white)),
-                    subtitle: Text(track.artist,
-                        style: const TextStyle(color: Colors.white54)),
+                    title: Text(
+                      track.title,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    subtitle: Text(
+                      track.artist,
+                      style: const TextStyle(color: Colors.white54),
+                    ),
                     trailing: track.duration != null
                         ? Text(
-                      '${track.duration!.inMinutes}:${(track.duration!.inSeconds % 60).toString().padLeft(2, '0')}',
-                      style: const TextStyle(color: Colors.white38),
-                    )
+                            '${track.duration!.inMinutes}:${(track.duration!.inSeconds % 60).toString().padLeft(2, '0')}',
+                            style: const TextStyle(color: Colors.white38),
+                          )
                         : null,
 
                     onTap: () => Navigator.pop(context, track),

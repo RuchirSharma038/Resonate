@@ -11,6 +11,7 @@ export const CLIENT = {
     SEEK:"seek",
     PING:"ping",
     REMOVE_FROM_QUEUE: "remove_from_queue",
+    SELECT_TRACK: "track_selected", 
 };
 export const SERVER = {
     SESSION_CREATED: "session_created",
@@ -25,5 +26,6 @@ export const SERVER = {
     SEEK_SONG:"seek_song",
     ERROR_MSG:"error_message",
     QUEUE_UPDATED: "queue_updated",
-    PONG:"pong"
+    PONG:"pong",
+    SELECT_TRACK: "track_selected", 
 };

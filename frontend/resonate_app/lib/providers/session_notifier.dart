@@ -18,7 +18,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   late final DriftCorrector _driftCorrector;
 
   SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
-      : super(SessionState.initial()) {
+    : super(SessionState.initial()) {
     _driftCorrector = DriftCorrector(
       player: audio.player,
       getServerTime: timeSync.getServerTime,
@@ -169,7 +169,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
 
     socket.listen("track_selected", (data) async {
-      final track = MusicTrack.fromJson(Map<String, dynamic>.from(data["track"]));
+      final track = MusicTrack.fromJson(
+        Map<String, dynamic>.from(data["track"]),
+      );
       await audio.load(track.audioUrl);
       state = state.copyWith(url: track.audioUrl, currentTrack: track);
     });
@@ -333,8 +335,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
   void selectTrack(MusicTrack track) async {
     if (state.sessionId.isEmpty) return;
 
+    state = state.copyWith(
+      url: track.audioUrl,
+      currentTrack: track,
+      playbackState: PlaybackState.stopped,
+      clearStartedAt: true,
+    );
+
     await audio.load(track.audioUrl);
-    state = state.copyWith(url: track.audioUrl, currentTrack: track);
 
     controller.selectTrack(state.sessionId, track.toJson());
   }

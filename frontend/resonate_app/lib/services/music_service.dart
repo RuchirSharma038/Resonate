@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'package:resonate_app/config/app_config.dart';
 import 'package:http/http.dart' as http;
 
 class MusicService {
-
-  static const String backendUrl = 'http://10.58.8.243:3001/api/music/search';
+  static String get backendUrl => AppConfig.musicSearchUrl;
 
   static Future<List<MusicTrack>> searchMusic(String query) async {
     try {
@@ -15,11 +15,19 @@ class MusicService {
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
 
-
         final List<dynamic> results = jsonData['results'] ?? [];
         if (results.isEmpty) throw Exception('No songs found for "$query"');
 
-        return results.map((track) => MusicTrack.fromApi(track)).toList();
+        return results
+            .map((track) {
+              try {
+                return MusicTrack.fromApi(track);
+              } catch (_) {
+                return null; // skip tracks with no previewUrl
+              }
+            })
+            .whereType<MusicTrack>()
+            .toList();
       } else {
         throw Exception('Failed to search music: ${response.statusCode}');
       }
@@ -48,13 +56,14 @@ class MusicTrack {
     this.duration,
   });
 
-
   factory MusicTrack.fromApi(Map<String, dynamic> json) {
+    final previewUrl = json['previewUrl'] as String? ?? '';
+    if (previewUrl.isEmpty) throw Exception('Track has no audio preview');
     return MusicTrack(
       id: json['trackId'].toString(),
       title: json['trackName'] ?? 'Unknown',
       artist: json['artistName'] ?? 'Unknown',
-      audioUrl: json['previewUrl'] ?? '',
+      audioUrl: previewUrl,
       imageUrl: json['artworkUrl100'],
       source: 'itunes',
       duration: Duration(milliseconds: json['trackTimeMillis'] ?? 0),
@@ -70,7 +79,7 @@ class MusicTrack {
       audioUrl: json['audioUrl'] ?? '',
       imageUrl: json['imageUrl'],
       source: json['source'] ?? 'api',
-      duration: Duration(seconds: json['duration'] ?? 0),
+      duration: Duration(seconds: (json['duration'] as num?)?.toInt() ?? 0),
     );
   }
 

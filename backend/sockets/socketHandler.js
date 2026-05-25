@@ -108,7 +108,7 @@ export default function socketHandler(io) {
       );
       
       socket.on(
-        "track_selected",
+        CLIENT.SELECT_TRACK,
         rateLimited(socket, playbackLimiter, (data) => {
           sessionController.selectTrack(io, socket, data);
         })

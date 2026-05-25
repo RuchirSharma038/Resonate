@@ -1,5 +1,6 @@
 // ignore: library_prefixes
 import 'dart:async';
+import 'package:resonate_app/config/app_config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // ignore: library_prefixes
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -14,6 +15,7 @@ class SocketService {
   // SocketService._internal();
 
   late IO.Socket socket;
+  //socket = IO.io(AppConfig.baseUrl, ...);
   StreamSubscription<User?>? _tokenRefreshSub;
 
   SocketService() {
