@@ -7,20 +7,13 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 //import 'dart:async';
 
 class SocketService {
-  // static final SocketService _instance = SocketService._internal();
-
-  // factory SocketService() {
-  //   return _instance;
-  // }
-  // SocketService._internal();
-
   late IO.Socket socket;
-  //socket = IO.io(AppConfig.baseUrl, ...);
+
   StreamSubscription<User?>? _tokenRefreshSub;
 
   SocketService() {
     socket = IO.io(
-      "http://10.58.8.243:3001",
+      AppConfig.baseUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -40,12 +33,10 @@ class SocketService {
 
     socket.onConnect((_) {
       _listenForTokenRefresh();
-      //print("Connected to server");
     });
 
     socket.onDisconnect((_) {
       _tokenRefreshSub?.cancel();
-      //print("Disconnected")
     });
 
     // Handle the server's response to our refresh_token event

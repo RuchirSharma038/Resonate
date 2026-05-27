@@ -26,7 +26,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _init();
   }
 
-  // ── Init
+  //   Init
+
   void _init() {
     controller.init();
     _listenConnection();
@@ -48,7 +49,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
     };
   }
 
-  // ── Listeners
+  //  Listeners
+
   void _listenConnection() {
     socket.listen("connect", (_) {
       state = state.copyWith(isConnected: true);
@@ -96,8 +98,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
       final hostId = data["hostId"] as String?;
       final sessionId = data["sessionId"] as String?;
       final participants = data["participants"];
-
-      // 1. GRAB THE QUEUE FROM THE SERVER STATE
       final queueRaw = data["queue"];
 
       state = state.copyWith(
@@ -115,7 +115,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
       }
 
       if (serverState == "playing" && serverStartAt != null) {
-        // Server sends live position. Seek there directly.
         await audio.seek(Duration(milliseconds: serverPos));
         await audio.play();
 
@@ -127,7 +126,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
           hostId: hostId,
         );
 
-        // Start drift correction.
         _driftCorrector.start(
           basePositionMs: serverPos,
           startedAtMs: timeSync.getServerTime().toInt(),
@@ -156,6 +154,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   bool _autoPlayAfterLoad = false;
+
   void _listenPlaybackEvents() {
     socket.listen("song_updated", (data) async {
       _driftCorrector.stop();
@@ -176,7 +175,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(url: track.audioUrl, currentTrack: track);
     });
 
-    // THE QUEUE LISTENER
     socket.listen("queue_updated", (data) {
       if (data != null) {
         final updatedQueue = List<String>.from(data);
@@ -196,7 +194,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
         await audio.seek(Duration(milliseconds: basePosition));
         await Future.delayed(Duration(milliseconds: timeUntilPlay.toInt()));
 
-        // Post-delay drift check
         final now2 = timeSync.getServerTime();
         final drift = (now2 - serverStartTime).toInt();
         if (drift.abs() > 15) {
@@ -204,7 +201,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
         }
         await audio.play();
       } else {
-        // Already past the start time — correct for the overrun.
         final overrun = (-timeUntilPlay).clamp(0, 10000).toInt();
         await audio.seek(Duration(milliseconds: basePosition + overrun));
         await audio.play();
@@ -217,7 +213,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
         position: Duration(milliseconds: basePosition),
       );
 
-      // Begin continuous drift monitoring.
       _driftCorrector.start(
         basePositionMs: basePosition,
         startedAtMs: serverStartTime,
@@ -271,7 +266,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
   }
 
-  // ── Public Actions
+  //  Public Actions
 
   void createSession() {
     state = state.copyWith(isLoading: true);
@@ -299,11 +294,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       return;
     }
 
-    state = state.copyWith(
-      error: null,
-      clearCurrentTrack: true,
-      clearError: true,
-    );
+    state = state.copyWith(clearCurrentTrack: true, clearError: true);
     controller.setUrl(state.sessionId, url);
   }
 
@@ -327,11 +318,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
     controller.seek(state.sessionId, positionMs);
   }
 
-  //  MANUAL QUEUE UPDATE FUNCTION
-  void updateQueue(List<String> newQueue) {
-    state = state.copyWith(queue: newQueue);
-  }
-
   void selectTrack(MusicTrack track) async {
     if (state.sessionId.isEmpty) return;
 
@@ -343,7 +329,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
     );
 
     await audio.load(track.audioUrl);
-
     controller.selectTrack(state.sessionId, track.toJson());
   }
 
@@ -359,7 +344,38 @@ class SessionNotifier extends StateNotifier<SessionState> {
     controller.setUrl(state.sessionId, url);
   }
 
-  // ── Helpers
+  //   Queue Actions
+
+  void addTrackToQueue(MusicTrack track) {
+    if (state.sessionId.isEmpty) return;
+    controller.addToQueue(state.sessionId, track.audioUrl);
+  }
+
+  void addUrlToQueue(String url) {
+    if (state.sessionId.isEmpty) return;
+
+    final error = _validateAudioUrl(url);
+    if (error != null) {
+      state = state.copyWith(error: error);
+      return;
+    }
+
+    controller.addToQueue(state.sessionId, url);
+  }
+
+  // Remove a URL from the session queue
+  void removeUrlFromQueue(String url) {
+    if (state.sessionId.isEmpty) return;
+    controller.removeFromQueue(state.sessionId, url);
+  }
+
+  //  Locally overwrite the queue
+
+  void updateQueue(List<String> newQueue) {
+    state = state.copyWith(queue: newQueue);
+  }
+
+  //    Helpers
 
   String? _validateAudioUrl(String url) {
     final trimmed = url.trim();

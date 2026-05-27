@@ -1,111 +1,268 @@
-import 'dart:async';
+// music_service.dart
+import 'dart:convert';
+import 'dart:io';
 
-import 'package:just_audio/just_audio.dart';
+import 'package:http/http.dart' as http;
+import 'package:resonate_app/config/app_config.dart';
 
-// Corrects audio drift by smoothly ramping playback speed or hard seeking.
-class DriftCorrector {
-  // Drift below this is acceptable — no action taken.
-  static const int _ignoreMs = 20;
+// Typed failures
 
-  // Drift above this is too large for smooth ramping — hard seek instead.
-  static const int _rampMaxMs = 200;
+sealed class MusicFailure {
+  const MusicFailure();
 
-  // Speed delta applied during ramp (3 % — imperceptible to human ear).
-  static const double _rampDelta = 0.03;
+  String get userMessage;
+}
 
-  // How often the correction loop wakes up and checks drift.
-  static const Duration _checkInterval = Duration(seconds: 3);
+// iTunes returned no playable tracks for the query
+final class NoResultsFailure extends MusicFailure {
+  final String query;
+  const NoResultsFailure(this.query);
 
-  final AudioPlayer _player;
-  final double Function() _getServerTime;
+  @override
+  String get userMessage => 'No playable tracks found for "$query".';
+}
 
-  Timer? _checkTimer;
-  Timer? _rampResetTimer;
-  final StreamController<double> _speedController = StreamController<double>.broadcast();
+// Device has no network connection
+final class NetworkFailure extends MusicFailure {
+  const NetworkFailure();
 
-  Stream<double> get speedStream => _speedController.stream;
+  @override
+  String get userMessage =>
+      'No internet connection. Check your network and try again.';
+}
 
-  int _basePositionMs = 0;
-  int _startedAtMs = 0; 
-  bool _active = false;
+// Request exceeded the timeout
+final class TimeoutFailure extends MusicFailure {
+  const TimeoutFailure();
 
-  DriftCorrector({
-    required AudioPlayer player,
-    required double Function() getServerTime,
-  })  : _player = player,
-        _getServerTime = getServerTime;
+  @override
+  String get userMessage => 'The request timed out. Please try again.';
+}
 
+//  backend returned HTTP 429
+final class RateLimitFailure extends MusicFailure {
+  const RateLimitFailure();
 
-  // Starts monitoring drift.
-  void start({required int basePositionMs, required int startedAtMs}) {
-    stop(); 
-    _basePositionMs = basePositionMs;
-    _startedAtMs = startedAtMs;
-    _active = true;
-    _checkTimer = Timer.periodic(_checkInterval, (_) => _check());
+  @override
+  String get userMessage =>
+      'Too many searches. Please wait a moment and try again.';
+}
+
+// Backend returned unexpected HTTP status
+final class ServerFailure extends MusicFailure {
+  final int statusCode;
+  const ServerFailure(this.statusCode);
+
+  @override
+  String get userMessage =>
+      'Server error ($statusCode). Please try again later.';
+}
+
+// Response JSON was malformed
+final class ParseFailure extends MusicFailure {
+  const ParseFailure();
+
+  @override
+  String get userMessage => 'Received unexpected data from the server.';
+}
+
+//   Result type
+
+sealed class MusicResult {
+  const MusicResult();
+}
+
+final class MusicSuccess extends MusicResult {
+  final List<MusicTrack> tracks;
+  const MusicSuccess(this.tracks);
+}
+
+final class MusicError extends MusicResult {
+  final MusicFailure failure;
+  const MusicError(this.failure);
+}
+
+// MusicTrack model
+
+final class MusicTrack {
+  final String id;
+  final String title;
+  final String artist;
+  final String audioUrl;
+  final String? imageUrl;
+  final String albumTitle;
+  final String genre;
+  final String source;
+  final Duration? duration;
+
+  const MusicTrack({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.audioUrl,
+    this.imageUrl,
+    this.albumTitle = '',
+    this.genre = '',
+    required this.source,
+    this.duration,
+  });
+
+  /// Deserialise from the backend's JSON shape (musicService.js → shapeTrack).
+  /// Throws [ParseFailure] if audioUrl is missing — callers catch it.
+  factory MusicTrack.fromJson(Map<String, dynamic> json) {
+    final audioUrl = json['audioUrl'] as String? ?? '';
+    if (audioUrl.isEmpty) throw const ParseFailure();
+
+    return MusicTrack(
+      id: json['id']?.toString() ?? '',
+      title: json['title'] as String? ?? 'Unknown',
+      artist: json['artist'] as String? ?? 'Unknown',
+      audioUrl: audioUrl,
+      imageUrl: json['imageUrl'] as String?,
+      albumTitle: json['albumTitle'] as String? ?? '',
+      genre: json['genre'] as String? ?? '',
+      source: json['source'] as String? ?? 'api',
+      // Safe cast: socket.io and JSON can deliver numbers as num, not int
+      duration: Duration(seconds: (json['duration'] as num?)?.toInt() ?? 0),
+    );
   }
 
-  // Stops monitoring and resets speed to 1.0.
-  void stop() {
-    _active = false;
-    _checkTimer?.cancel();
-    _checkTimer = null;
-    _cancelRamp();
-    _applySpeed(1.0);
+  /// Serialise for Socket.IO transmission to other clients.
+  /// Field names must match MusicTrack.fromJson.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'artist': artist,
+    'audioUrl': audioUrl,
+    'imageUrl': imageUrl,
+    'albumTitle': albumTitle,
+    'genre': genre,
+    'source': source,
+    'duration': duration?.inSeconds ?? 0,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is MusicTrack && other.id == id && other.audioUrl == audioUrl;
+
+  @override
+  int get hashCode => Object.hash(id, audioUrl);
+
+  @override
+  String toString() => 'MusicTrack($title – $artist)';
+}
+
+// ── Private API client ────────────────────────────────────────────────────────
+//
+// Single responsibility: make an HTTP request and return raw bytes / status.
+// No business logic. No retry. No JSON parsing beyond the envelope.
+
+class _MusicApiClient {
+  static final http.Client _client = http.Client();
+  static const Duration _timeout = Duration(seconds: 12);
+
+  static Future<http.Response> search(String query, int limit) {
+    final uri = Uri.parse(
+      AppConfig.musicSearchUrl,
+    ).replace(queryParameters: {'q': query, 'limit': limit.toString()});
+    return _client.get(uri).timeout(_timeout);
   }
+}
 
-  void dispose() {
-    stop();
-    _speedController.close();
-  }
+// ── MusicRepository ───────────────────────────────────────────────────────────
+//
+// Business logic layer.
+//   - Calls the API client
+//   - Maps HTTP errors to typed MusicFailure values
+//   - Parses and validates the response
+//   - Handles retry for transient errors
+//
+// Returns MusicResult — never throws. The UI always gets a typed outcome.
 
-  void _check() {
-    if (!_active) return;
+class MusicRepository {
+  static const int _maxRetries = 2;
 
-    final serverNow = _getServerTime();
-    final expectedMs = _basePositionMs + (serverNow - _startedAtMs).toInt();
-    final actualMs = _player.position.inMilliseconds;
-    
-    final driftMs = expectedMs - actualMs;
-    final absDrift = driftMs.abs();
+  /// Search for playable tracks. Always returns [MusicResult], never throws.
+  static Future<MusicResult> search(String query, {int limit = 20}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return MusicError(NoResultsFailure(trimmed));
 
-    if (absDrift <= _ignoreMs) {
-      _cancelRamp();
-      _applySpeed(1.0);
-      return;
+    final effectiveLimit = limit.clamp(1, 20);
+
+    for (int attempt = 0; attempt <= _maxRetries; attempt++) {
+      final result = await _attempt(trimmed, effectiveLimit);
+
+      // Retry only transient errors, not user errors or rate limits
+      if (result is MusicError) {
+        final failure = result.failure;
+        final isTransient =
+            failure is TimeoutFailure || failure is ServerFailure;
+
+        if (isTransient && attempt < _maxRetries) {
+          // Exponential back-off: 400ms, 800ms
+          await Future.delayed(Duration(milliseconds: 400 * (1 << attempt)));
+          continue;
+        }
+      }
+
+      return result;
     }
 
-    if (absDrift > _rampMaxMs) {
-      _cancelRamp();
-      _applySpeed(1.0);
-      _player.seek(Duration(milliseconds: expectedMs));
-      return;
+    return const MusicError(NetworkFailure());
+  }
+
+  static Future<MusicResult> _attempt(String query, int limit) async {
+    http.Response response;
+
+    try {
+      response = await _MusicApiClient.search(query, limit);
+    } on SocketException {
+      return const MusicError(NetworkFailure());
+    } on http.ClientException {
+      return const MusicError(NetworkFailure());
+    } on TimeoutException {
+      return const MusicError(TimeoutFailure());
     }
 
-    // Smooth speed ramp for minor corrections
-    final speed = driftMs > 0 ? 1.0 + _rampDelta : 1.0 - _rampDelta;
-    final correctionMs = (absDrift / _rampDelta).round();
-
-    _applyRamp(speed, correctionMs);
+    return _handleResponse(response, query);
   }
 
-  void _applySpeed(double speed) {
-    if (!_speedController.isClosed) {
-      _speedController.add(speed);
+  static MusicResult _handleResponse(http.Response response, String query) {
+    switch (response.statusCode) {
+      case 200:
+        return _parseSuccess(response.body, query);
+      case 404:
+        return MusicError(NoResultsFailure(query));
+      case 429:
+        return const MusicError(RateLimitFailure());
+      case >= 500:
+        return MusicError(ServerFailure(response.statusCode));
+      default:
+        return MusicError(ServerFailure(response.statusCode));
     }
-    _player.setSpeed(speed);
   }
 
-  void _applyRamp(double speed, int durationMs) {
-    _cancelRamp();
-    _applySpeed(speed);
-    _rampResetTimer = Timer(Duration(milliseconds: durationMs), () {
-      _applySpeed(1.0);
-    });
-  }
+  static MusicResult _parseSuccess(String body, String query) {
+    Map<String, dynamic> json;
+    try {
+      json = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      return const MusicError(ParseFailure());
+    }
 
-  void _cancelRamp() {
-    _rampResetTimer?.cancel();
-    _rampResetTimer = null;
+    if (json['results'] is! List) return const MusicError(ParseFailure());
+
+    final tracks = <MusicTrack>[];
+    for (final item in json['results'] as List) {
+      if (item is! Map<String, dynamic>) continue;
+      try {
+        tracks.add(MusicTrack.fromJson(item));
+      } on ParseFailure {
+        continue; // skip individual malformed tracks silently
+      }
+    }
+
+    if (tracks.isEmpty) return MusicError(NoResultsFailure(query));
+    return MusicSuccess(tracks);
   }
 }
