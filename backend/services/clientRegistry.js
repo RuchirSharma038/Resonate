@@ -1,4 +1,4 @@
-const userToSocket = new Map();
+const userToSockets = new Map();
 const socketToUser = new Map();
 
 function registerClient(socket) {
