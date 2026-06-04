@@ -15,6 +15,12 @@ function originValidator(origin, callback) {
         return;
     }
 
+    // Allow local development
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+        callback(null, true);
+        return;
+    }
+
     const allowed = getAllowedOrigins();
 
     if (allowed.includes(origin)) {

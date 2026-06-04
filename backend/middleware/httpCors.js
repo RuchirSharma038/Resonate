@@ -18,7 +18,7 @@ export function httpCorsMiddleware(req, res, next) {
     }
 
     const allowed = getAllowedOrigins();
-    if (allowed.includes(origin)) {
+    if (allowed.includes(origin) || origin.includes("localhost") || origin.includes("127.0.0.1")) {
         res.header("Access-Control-Allow-Origin", origin);
         res.header("Vary", "Origin");
     }
