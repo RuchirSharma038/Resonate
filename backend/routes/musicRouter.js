@@ -1,4 +1,3 @@
-
 import { Router } from "express";
 import { MusicService } from "../services/musicService.js";
 import * as logger from "../utils/logger.js";
@@ -65,7 +64,7 @@ router.get("/search", async (req, res) => {
         ? Math.min(Math.max(rawLimit, 1), 20)
         : 20;
 
-    // Delegate to service — router knows nothing about how results are fetched
+    // Call service
     let result;
     try {
         result = await MusicService.search(query, limit);
