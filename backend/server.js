@@ -10,6 +10,7 @@ import * as logger from "./utils/logger.js";
 
 // App & Server
 const app = express();
+app.set("trust proxy", true); // Ensure req.ip works behind Vercel/proxies
 const server = http.createServer(app);
 
 

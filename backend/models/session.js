@@ -17,7 +17,7 @@ class Session {
 
     this.createdAt = Date.now();
 
-    //Add command seq for command sequencing
+    // Command seq for command sequencing
     this.lastCommandSeq=-1;
 
     this.queue = [];
