@@ -32,6 +32,7 @@ export default function socketHandler(io) {
 
       //Register User
       clientRegistry.registerClient(socket);
+      attachTokenRefreshHandler(socket);
 
       /*
         SESSION EVENTS
@@ -106,7 +107,7 @@ export default function socketHandler(io) {
           sessionController.seek(io, socket, data);
         })
       );
-      
+
       socket.on(
         CLIENT.SELECT_TRACK,
         rateLimited(socket, playbackLimiter, (data) => {
