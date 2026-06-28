@@ -99,7 +99,7 @@ export function leaveSession(io, socket, data) {
 
     const session = get(sessionId);
 
-    validators.requireSession(socket, session);
+    if (!validators.requireSession(socket, session)) return;
 
     // remove the clientId from sessionMap
     removeClient(sessionId, socket.userId);
@@ -321,7 +321,7 @@ export const playNext = (io, socket, data) => {
     const session = get(sessionId);
 
     if (!validators.requireSession(socket, session)) return;
-    if (!validators.requireHost(socket, session)) return; // Only host can skip/auto-play next!
+    if (!validators.requireHost(socket, session)) return; 
     if (isStaleCommand(session, seq)) return;
 
     const nextData = playNextTrack(sessionId);
@@ -342,6 +342,11 @@ export const playNext = (io, socket, data) => {
 
 
         io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime, position: 0 });
+    } else {
+        session.state = "stopped";
+        session.position = 0;
+        session.startedAt = null;
+        io.to(sessionId).emit(SERVER.STOP_SONG);
     }
 };
 export const removeFromQueue = (io, socket, data) => {

@@ -22,7 +22,11 @@ function isRateLimited(ip) {
 }
 
 export function httpRateLimiter(req, res, next) {
-    const ip = req.ip ?? req.socket?.remoteAddress ?? "unknown";
+    // Check proxy headers first, then req.ip, then raw socket
+    const rawForwarded = req.headers['x-forwarded-for'];
+    const forwardedIp = typeof rawForwarded === 'string' ? rawForwarded.split(',')[0].trim() : null;
+    
+    const ip = forwardedIp ?? req.ip ?? req.socket?.remoteAddress ?? "unknown";
     if (isRateLimited(ip)) {
         return res.status(429).json({
             error: "Too many search requests. Please wait a moment.",
