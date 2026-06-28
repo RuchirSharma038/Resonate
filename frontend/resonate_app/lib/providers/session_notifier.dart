@@ -17,12 +17,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   late final DriftCorrector _driftCorrector;
 
-  SessionNotifier(this.controller, this.socket, this.audio, this.timeSync)
-    : super(SessionState.initial()) {
-    _driftCorrector = DriftCorrector(
-      player: audio.player,
-      getServerTime: timeSync.getServerTime,
-    );
+  SessionNotifier(
+      this.controller, this.socket, this.audio, this.timeSync, this._driftCorrector)
+      : super(SessionState.initial()) {
     _init();
   }
 
@@ -191,6 +188,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       final timeUntilPlay = serverStartTime - now;
 
       if (timeUntilPlay > 0) {
+        await audio.pause();
         await audio.seek(Duration(milliseconds: basePosition));
         await Future.delayed(Duration(milliseconds: timeUntilPlay.toInt()));
 
@@ -261,6 +259,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
     socket.listen("error_message", (data) {
       state = state.copyWith(
         error: data["message"] as String?,
+        isLoading: false,
+      );
+    });
+
+    socket.listen("connect_error", (data) {
+      state = state.copyWith(
+        error: "Connection failed. Please try again.",
         isLoading: false,
       );
     });

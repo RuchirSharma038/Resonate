@@ -5,6 +5,7 @@ import 'package:resonate_app/providers/audioservice_provider.dart';
 import 'package:resonate_app/providers/session_notifier.dart';
 import 'package:resonate_app/providers/session_state.dart';
 import 'package:resonate_app/services/socket_service.dart';
+import 'package:resonate_app/services/drift_corrector.dart';
 import 'package:resonate_app/services/time_sync_service.dart';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
@@ -38,5 +39,14 @@ final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((
   final audio = ref.read(audioServiceProvider);
   final timeSync = ref.read(timeSyncServiceProvider);
 
-  return SessionNotifier(controller, socket, audio, timeSync);
+  return SessionNotifier(
+    controller,
+    socket,
+    audio,
+    timeSync,
+    DriftCorrector(
+      player: audio.player,
+      getServerTime: timeSync.getServerTime,
+    ),
+  );
 });
