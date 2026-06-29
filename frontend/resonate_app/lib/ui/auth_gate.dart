@@ -17,7 +17,7 @@ class AuthGate extends ConsumerWidget {
           // No user found, show the Login/Signup screen
           return const AuthScreen();
         }
-        // User is logged in, show the main app!
+        // User is logged in, show the main app
         return const HomeScreen();
       },
       loading: () => const Scaffold(
@@ -26,7 +26,7 @@ class AuthGate extends ConsumerWidget {
         ),
       ),
 
-      // ERROR STATE: Something went fundamentally wrong with Firebase
+      // ERROR STATE: Something went wrong with Firebase
       error: (error, stackTrace) => Scaffold(
         body: _ResonateSplashScreen(
           child: Padding(
@@ -53,8 +53,6 @@ class AuthGate extends ConsumerWidget {
   }
 }
 
-/// A private helper widget to ensure the background and logo are perfectly
-/// consistent across the Loading and Error states, matching the AuthScreen.
 class _ResonateSplashScreen extends StatelessWidget {
   final Widget child;
 
@@ -93,7 +91,7 @@ class _ResonateSplashScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 48),
-            // The injected child (Spinner or Error Text)
+
             child,
           ],
         ),

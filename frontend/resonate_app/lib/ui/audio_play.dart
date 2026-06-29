@@ -136,7 +136,7 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // addToQueue goes through the notifier — no direct socket access
+              // addToQueue goes through the notifier
               ref.read(sessionProvider.notifier).addTrackToQueue(track);
             },
             child: const Text(
@@ -280,12 +280,12 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
                 queue: session.queue,
                 sessionId: session.sessionId,
                 isHost: isHost,
-                onPlayNow: (url) => _onlyHost(isHost, () {
-                  ref.read(sessionProvider.notifier).setUrlAndPlay(url);
-                  ref.read(sessionProvider.notifier).removeUrlFromQueue(url);
+                onPlayNow: (track) => _onlyHost(isHost, () {
+                  ref.read(sessionProvider.notifier).selectTrack(track);
+                  ref.read(sessionProvider.notifier).removeTrackFromQueue(track.id);
                 }),
-                onRemove: (url) => _onlyHost(isHost, () {
-                  ref.read(sessionProvider.notifier).removeUrlFromQueue(url);
+                onRemove: (trackId) => _onlyHost(isHost, () {
+                  ref.read(sessionProvider.notifier).removeTrackFromQueue(trackId);
                 }),
               ),
             ],
@@ -306,7 +306,6 @@ class _AudioPlayState extends ConsumerState<AudioPlay> {
         onPressed: hasSession
             ? () {
                 ref.read(sessionProvider.notifier).leaveSession();
-                Navigator.of(context).pop();
               }
             : null,
       ),
@@ -690,11 +689,11 @@ class _UrlInputRow extends StatelessWidget {
 }
 
 class _QueueList extends StatelessWidget {
-  final List<String> queue;
+  final List<MusicTrack> queue;
   final String sessionId;
   final bool isHost;
-  final void Function(String url) onPlayNow;
-  final void Function(String url) onRemove;
+  final void Function(MusicTrack track) onPlayNow;
+  final void Function(String trackId) onRemove;
 
   const _QueueList({
     required this.queue,
@@ -719,18 +718,28 @@ class _QueueList extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           itemCount: queue.length,
           itemBuilder: (context, index) {
-            final url = queue[index];
+            final track = queue[index];
             return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.white10,
-                child: Text(
-                  '${index + 1}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: track.imageUrl != null
+                    ? Image.network(track.imageUrl!, width: 40, height: 40, fit: BoxFit.cover)
+                    : Container(
+                        width: 40,
+                        height: 40,
+                        color: Colors.white10,
+                        child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
+                      ),
               ),
               title: Text(
-                url,
-                style: const TextStyle(fontSize: 13),
+                track.title,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                track.artist,
+                style: const TextStyle(fontSize: 11, color: Colors.white54),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -743,14 +752,14 @@ class _QueueList extends StatelessWidget {
                             Icons.play_circle_fill,
                             color: Colors.greenAccent,
                           ),
-                          onPressed: () => onPlayNow(url),
+                          onPressed: () => onPlayNow(track),
                         ),
                         IconButton(
                           icon: const Icon(
                             Icons.delete_outline,
                             color: Colors.redAccent,
                           ),
-                          onPressed: () => onRemove(url),
+                          onPressed: () => onRemove(track.id),
                         ),
                       ],
                     )

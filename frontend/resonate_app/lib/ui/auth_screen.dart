@@ -85,7 +85,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // A nice gradient background fitting for a music app
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -105,7 +104,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // --- App Logo / Title ---
+                    //  App Logo / Title
                     const Icon(
                       Icons.graphic_eq_rounded,
                       size: 80,
@@ -135,7 +134,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ),
                     const SizedBox(height: 48),
 
-                    // --- Form Fields ---
+                    //   Form Fields
                     AnimatedSize(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
@@ -204,7 +203,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // --- Submit Button ---
+                    //  Submit Button
                     SizedBox(
                       height: 50,
                       child: ElevatedButton(
@@ -238,7 +237,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // --- Mode Toggle Button ---
+                    //  Mode Toggle Button
                     TextButton(
                       onPressed: _isLoading ? null : _switchAuthMode,
                       style: TextButton.styleFrom(
@@ -261,7 +260,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     );
   }
 
-  // Helper method for clean, reusable text field styling
+  // Helper method for text field styling
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
