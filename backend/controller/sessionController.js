@@ -294,13 +294,12 @@ export const handlePing = (socket, data) => {
 }
 
 export const addToQueue = (io, socket, data) => {
-    const { sessionId, url } = data;
+    const { sessionId, track } = data;
     const session = get(sessionId);
-
 
     if (!validators.requireSession(socket, session)) return;
     if (!validators.requireHost(socket, session)) return;
-    if (!validators.requireValidUrl(socket, url)) return;
+    if (!track || !track.audioUrl || !validators.requireValidUrl(socket, track.audioUrl)) return;
 
     if ((session.queue?.length ?? 0) >= MAX_QUEUE_LENGTH) {
         socket.emit(SERVER.ERROR_MSG, {
@@ -309,9 +308,8 @@ export const addToQueue = (io, socket, data) => {
         return;
     }
 
-    const updatedQueue = addToQueueService(sessionId, url);
+    const updatedQueue = addToQueueService(sessionId, track);
     if (updatedQueue) {
-
         io.to(sessionId).emit(SERVER.QUEUE_UPDATED, updatedQueue);
     }
 };
@@ -327,20 +325,15 @@ export const playNext = (io, socket, data) => {
     const nextData = playNextTrack(sessionId);
 
     if (nextData) {
-
         const startTime = timeUtils.computeStartTime();
 
         session.state = "playing";
         session.startedAt = startTime;
         session.position = 0;
+        session.currentTrack = nextData.track;
 
-
-        io.to(sessionId).emit(SERVER.SONG_UPDATED, { url: nextData.trackUrl });
-
-
+        io.to(sessionId).emit(SERVER.SONG_UPDATED, { track: nextData.track });
         io.to(sessionId).emit(SERVER.QUEUE_UPDATED, nextData.queue);
-
-
         io.to(sessionId).emit(SERVER.PLAY_SONG, { startTime: startTime, position: 0 });
     } else {
         session.state = "stopped";
@@ -349,19 +342,19 @@ export const playNext = (io, socket, data) => {
         io.to(sessionId).emit(SERVER.STOP_SONG);
     }
 };
-export const removeFromQueue = (io, socket, data) => {
-    const { sessionId, url } = data;
-    const session = get(sessionId);
+import { removeFromQueueService } from "../services/sessionManager.js";
 
+export const removeFromQueue = (io, socket, data) => {
+    const { sessionId, trackId } = data;
+    const session = get(sessionId);
 
     if (!validators.requireSession(socket, session)) return;
     if (!session.queue || session.queue.length === 0) return;
 
-
-    session.queue = session.queue.filter(trackUrl => trackUrl !== url);
-
-
-    io.to(sessionId).emit(SERVER.QUEUE_UPDATED, session.queue);
+    const updatedQueue = removeFromQueueService(sessionId, trackId);
+    if (updatedQueue) {
+        io.to(sessionId).emit(SERVER.QUEUE_UPDATED, updatedQueue);
+    }
 };
 export const selectTrack = (io, socket, data) => {
     const { sessionId, track } = data;
