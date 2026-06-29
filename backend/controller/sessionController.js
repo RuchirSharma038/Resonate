@@ -149,7 +149,7 @@ export const handleDisconnect = (io, socket) => {
 
 
 export const setUrl = (io, socket, data) => {
-    const { sessionId, url, seq } = data;
+    const { sessionId, track, seq } = data;
     const session = get(sessionId);
     if (!validators.requireSession(socket, session)) {
         return;
@@ -157,16 +157,17 @@ export const setUrl = (io, socket, data) => {
     if (!validators.requireHost(socket, session)) {
         return;
     }
-    if (!validators.requireValidUrl(socket, url)) return;
+    if (!track || !track.audioUrl || !validators.requireValidUrl(socket, track.audioUrl)) return;
 
     if (isStaleCommand(session, seq)) return;
 
 
-    session.trackUrl = url;
+    session.trackUrl = track.audioUrl;
+    session.currentTrack = track;
     session.state = "stopped";
     session.position = 0;
     session.startedAt = null;
-    io.to(sessionId).emit(SERVER.SONG_UPDATED, { url: url });
+    io.to(sessionId).emit(SERVER.SONG_UPDATED, { track: track });
 
 
 }
