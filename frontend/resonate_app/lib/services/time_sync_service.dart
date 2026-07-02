@@ -28,7 +28,7 @@ class TimeSyncService {
 
     socket.listen('pong', _onPong);
     _startInitialSync();
-    _scheduleAdaptivePing();
+    //_scheduleAdaptivePing();
   }
 
   double getServerTime() =>
@@ -110,7 +110,9 @@ class TimeSyncService {
   void _scheduleAdaptivePing() {
     periodicTimer?.cancel();
     final v = _variance(_offsetBuffer);
-    final seconds = v < 5
+    final seconds = _offsetBuffer.length < bufferSize
+        ? 2
+        : v < 5
         ? 30
         : v < 20
         ? 10

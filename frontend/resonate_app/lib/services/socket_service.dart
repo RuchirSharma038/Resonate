@@ -23,28 +23,41 @@ class SocketService {
 
   Future<void> connect() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print("SocketService: User is null, cannot connect.");
+      return;
+    }
 
-    final idToken = await user.getIdToken();
+    try {
+      final idToken = await user.getIdToken();
 
-    socket.io.options?['auth'] = {'token': idToken};
-    socket.auth = {'token': idToken};
-    socket.connect();
+      socket.io.options?['auth'] = {'token': idToken};
+      socket.auth = {'token': idToken};
+      socket.connect();
 
-    socket.onConnect((_) {
-      _listenForTokenRefresh();
-    });
+      socket.onConnect((_) {
+        print("SocketService: Connected successfully!");
+        _listenForTokenRefresh();
+      });
 
-    socket.onDisconnect((_) {
-      _tokenRefreshSub?.cancel();
-    });
+      socket.onConnectError((err) {
+        print("SocketService: Connection Error: $err");
+      });
 
-    // Handle the server's response to our refresh_token event
-    socket.on('token_refresh_result', (data) {
-      if (data is Map && data['success'] == false) {
-        disconnect();
-      }
-    });
+      socket.onDisconnect((_) {
+        print("SocketService: Disconnected.");
+        _tokenRefreshSub?.cancel();
+      });
+
+      // Handle the server's response to our refresh_token event
+      socket.on('token_refresh_result', (data) {
+        if (data is Map && data['success'] == false) {
+          disconnect();
+        }
+      });
+    } catch (e) {
+      print("SocketService: Error fetching token or connecting: $e");
+    }
   }
 
   void _listenForTokenRefresh() {
